@@ -37,12 +37,9 @@ function! hassistant#cache_functions()
   let l:pandi   = hassistant#mk_query()
   let l:curHash = sha256(l:pandi)
 
-  if !exists('b:hassistant_functions_cache_hash') || b:hassistant_functions_cache_hash != l:curHash
-    let b:hassistant_functions_cache = eval(libcall(g:hassistant_library, "listFunctions", l:pandi))
-  endif
-
-  if !exists('b:hassistant_functions_cache_hash')
-    let b:hassistant_functions_cache_hash = sha256(l:pandi)
+  if !exists('b:hassistant_cache_hash') || b:hassistant_cache_hash != l:curHash
+    let [b:hassistant_functions_cache, b:hassistant_types_cache] = eval(libcall(g:hassistant_library, "listFunctions", l:pandi))
+    let b:hassistant_cache_hash = sha256(l:pandi)
   endif
 endfunction
 
