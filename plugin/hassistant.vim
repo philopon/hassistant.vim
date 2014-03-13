@@ -12,7 +12,7 @@ let s:save_cpo = &cpo
 set cpo&vim
 
 if !exists('g:hassistant_library')
-  let g:hassistant_library = expand('<sfile>:p:h:h') . '/dist/build/hassistant.dylib/hassistant.dylib'
+  let g:hassistant_library = expand('<sfile>:p:h:h') . '/.cabal-sandbox/bin/hassistant.dylib'
 endif
 
 call neocomplete#custom#source('hassistant_function', 'converters',
