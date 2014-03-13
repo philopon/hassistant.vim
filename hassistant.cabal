@@ -31,6 +31,7 @@ executable hassistant.dylib
                      , attoparsec
                      , template-haskell
                      , unordered-containers
+                     , hashable
   -- hs-source-dirs:      
   ghc-options:         -O2 -Wall -no-hs-main -optl-shared
   cpp-options:         -DMODULE=Hassistant

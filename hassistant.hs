@@ -35,6 +35,7 @@ import qualified Data.Text.IO    as T
 import qualified Data.Text.Encoding       as T
 import           Data.List
 import qualified Data.HashMap.Strict as H
+import qualified Data.Hashable as Hash
 
 import           Data.Maybe
 import           Data.Either
@@ -63,6 +64,7 @@ foreign export ccall getRoot       :: C.CString -> IO C.CString
 foreign export ccall listModule    :: C.CString -> IO C.CString
 foreign export ccall listFunctions :: C.CString -> IO C.CString
 foreign export ccall destruct      :: IO ()
+foreign export ccall queryHash :: C.CString -> IO C.CInt
 #endif
 
 destructors :: IORef.IORef [IO ()]
@@ -92,11 +94,10 @@ ghcArgs root = do
     return db
   where sandboxConf = root F.</> "cabal.sandbox.config"
 
-runGHC :: FilePath -> S.ByteString -> GHC.Ghc b -> IO b
-runGHC file xstr m = do
+runGHC :: FilePath -> [OnOff DynFlags.ExtensionFlag] -> GHC.Ghc b -> IO b
+runGHC file xflags m = do
     root          <- getRoot' file
     extraPkgConfs <- maybe (return id) ghcArgs root
-    let xflags = parseXFlags xstr
     GHC.runGhc (Just GHC.Paths.libdir) $ do
         (dflags, _) <-
             MonadUtils.liftIO . Packages.initPackages . applyXFlags xflags .
@@ -170,29 +171,34 @@ listModule' = do
 listModule :: C.CString -> IO C.CString
 listModule cfile =  do
     file <- C.peekCString cfile
-    mdl  <- runGHC file "" listModule'
+    mdl  <- runGHC file [] listModule'
     newCStringFromBS . L.toStrict $ J.encode mdl
 
 --------------------------------------------------------------------------------
 
-parseModule :: FilePath -> String -> GHC.Ghc (Either String (HsSyn.ImportDecl GHC.RdrName))
-parseModule fn str = GhcMonad.withSession $ \sess -> do
-    case Lexer.unP Parser.parseModule (st $ HscTypes.hsc_dflags sess) of
-        Lexer.PFailed _ m -> Left <$> sdocToString m
-        Lexer.POk _ (SrcLoc.L _ m) -> case HsSyn.hsmodImports m of
-            []             -> return . Left $ "No Imports"
-            SrcLoc.L _ a@HsSyn.ImportDecl
-                { HsSyn.ideclName = SrcLoc.L _ n
-                , HsSyn.ideclPkgQual = pkg
-                }:_ -> do
-                    MonadUtils.liftIO $ Finder.findExposedPackageModule sess n pkg >>= return . \case
-                        Finder.Found _ _       -> Right a
-                        Finder.NoPackage _     -> Left "No Package"
-                        Finder.FoundMultiple _ -> Left "Found Multiple"
-                        Finder.NotFound{}      -> Left "Not Found"
-  where st df = Lexer.mkPState df (StringBuffer.stringToStringBuffer str)
-                (SrcLoc.mkRealSrcLoc (FastString.mkFastString fn) 0 0)
+readModule :: DynFlags.DynFlags -> FilePath -> String -> GHC.Ghc (Either String (HsSyn.LImportDecl GHC.RdrName))
+readModule df fn str = case Lexer.unP Parser.parseModule st of
+    Lexer.PFailed _ m -> Left <$> sdocToString m
+    Lexer.POk _ (SrcLoc.L _ m) -> return $ case HsSyn.hsmodImports m of
+        []  -> Left "No Imports"
+        h:_ -> Right h
+  where st = Lexer.mkPState df (StringBuffer.stringToStringBuffer str)
+             (SrcLoc.mkRealSrcLoc (FastString.mkFastString fn) 0 0)
 
+parseModule :: FilePath -> String -> GHC.Ghc (Either String (HsSyn.ImportDecl GHC.RdrName))
+parseModule fn str = GhcMonad.withSession $ \sess ->
+    readModule (HscTypes.hsc_dflags sess) fn str >>= \case
+        Left e -> return $ Left e
+        Right (SrcLoc.L _ a@HsSyn.ImportDecl 
+            { HsSyn.ideclName = SrcLoc.L _ n
+            , HsSyn.ideclPkgQual = pkg
+            }) -> do
+                MonadUtils.liftIO $ Finder.findExposedPackageModule sess n pkg >>= return . \case
+                    Finder.Found _ _       -> Right a
+                    Finder.NoPackage _     -> Left "No Package"
+                    Finder.FoundMultiple _ -> Left "Found Multiple"
+                    Finder.NotFound{}      -> Left "Not Found"
+            
 typeOf :: GhcMonad.GhcMonad m => HscTypes.HscEnv -> Name.Name -> m (Maybe Type.Type)
 typeOf sess nm = MonadUtils.liftIO $
     snd <$> TcRnDriver.tcRnExpr sess 
@@ -247,12 +253,34 @@ listFunctions arg = do
         [l]    -> ("<listFunctions>", T.encodeUtf8 l, [])
         [f,l]  -> (T.unpack f,        T.encodeUtf8 l, [])
         f:l:is -> (T.unpack f,        T.encodeUtf8 l, map T.unpack is)
-    runGHC file xfs (listFunctions' file is) >>=
+    runGHC file (parseXFlags xfs) (listFunctions' file is) >>=
         newCStringFromBS . L.toStrict . J.encode 
+
+queryHash' :: T.Text -> GhcMonad.Ghc Int
+queryHash' = go . T.lines
+  where
+    defaultSalt = 0xdc36d1615b7400a4
+    xflags x    = foldl' Hash.hashWithSalt defaultSalt . map (\(On o) -> fromEnum o) $ filter isOn (parseXFlags x)
+    go []       = return $ Hash.hash (0::Int)
+    go [x]      = return $ xflags (T.encodeUtf8 x)
+    go [f,x]    = return $ Hash.hashWithSalt (xflags $ T.encodeUtf8 x) $ T.strip f
+    go (f:x:is) = do
+        df  <- GHC.getSessionDynFlags
+        pis <- rights <$> mapM (readModule df "" . T.unpack) is
+        can <- sdocToString $ Outputable.ppr pis
+        return $ Hash.hashWithSalt (Hash.hashWithSalt (xflags $ T.encodeUtf8 x) $ T.strip f) can
+
+queryHash :: C.CString -> IO C.CInt
+queryHash cstr = S.unsafePackCString cstr >>= \bs -> 
+    fromIntegral <$> runGHC "queryHash" [] (queryHash' $ T.decodeUtf8 bs)
 
 --------------------------------------------------------------------------------
 
 data OnOff a = On a | Off a deriving Show
+
+isOn :: OnOff a -> Bool
+isOn (On _) = True
+isOn _      = False
 
 xFlagParser :: P.Parser (OnOff DynFlags.ExtensionFlag)
 xFlagParser = PC.skipSpace *> pragma
