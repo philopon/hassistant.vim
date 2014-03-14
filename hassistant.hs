@@ -81,6 +81,9 @@ newCStringFromBS bs = S.unsafeUseAsCStringLen bs $ \(cstr, len) -> do
     C.pokeByteOff mem len (0::C.CUChar)
     return mem
 
+newCString :: String -> IO C.CString
+newCString s = C.newCString s >>= \mem -> IORef.atomicModifyIORef destructors (\ref -> (C.free mem: ref, ())) >> return mem
+
 --------------------------------------------------------------------------------
 
 ghcArgs :: FilePath -> IO ([DynFlags.PkgConfRef] -> [DynFlags.PkgConfRef])
@@ -150,7 +153,7 @@ getRoot' file = D.doesDirectoryExist file >>= \d -> runMaybeT $ go (if d then fi
 getRoot :: C.CString -> IO C.CString
 getRoot cfile = 
     C.peekCString cfile >>= getRoot' >>= 
-        C.newCString . fromMaybe ""
+        newCString . fromMaybe ""
 
 getSandboxPackageDB :: FilePath -> IO (Maybe FilePath)
 getSandboxPackageDB sandboxConf =
