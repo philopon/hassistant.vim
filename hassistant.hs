@@ -1,6 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction, ForeignFunctionInterface #-}
 {-# LANGUAGE OverloadedStrings, CPP, LambdaCase, StandaloneDeriving #-}
-{-# LANGUAGE ScopedTypeVariables, PackageImports #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Hassistant where
 
@@ -28,7 +28,7 @@ import qualified Name
 import qualified HsExpr
 import qualified GHC.Paths
 
-import qualified Data.ByteString as S
+import qualified Data.ByteString as S 
 import qualified Data.ByteString.Unsafe as S
 import qualified Data.ByteString.Char8 as SC
 import qualified Data.ByteString.Lazy.Char8 as L
@@ -55,6 +55,7 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.Maybe
 import Control.Monad.IO.Class
+import Control.Exception
 import qualified System.Directory as D
 import qualified System.FilePath  as F
 
@@ -100,19 +101,21 @@ ghcArgs root = do
     return db
   where sandboxConf = root F.</> "cabal.sandbox.config"
 
-runGHC :: FilePath -> [OnOff DynFlags.ExtensionFlag] -> GHC.Ghc b -> IO b
-runGHC file xflags m = do
-    root          <- getRoot' file
-    extraPkgConfs <- maybe (return id) ghcArgs root
-    GHC.runGhc (Just GHC.Paths.libdir) $ do
-        (dflags, _) <-
-            MonadUtils.liftIO . Packages.initPackages . applyXFlags xflags .
-                (\d -> d { GHC.extraPkgConfs = extraPkgConfs
-                         , GHC.pkgDatabase   = Nothing
-                         , GHC.ghcLink       = GHC.LinkInMemory
-                         } ) =<< GHC.getSessionDynFlags
-        void $ GHC.setSessionDynFlags dflags
-        m
+runGHC :: FilePath -> [OnOff DynFlags.ExtensionFlag] -> GHC.Ghc b -> IO (Maybe b)
+runGHC file xflags m = (Just <$> go) `catch` (\(_ :: SomeException) -> return Nothing)
+  where
+    go = do
+        root          <- getRoot' file
+        extraPkgConfs <- maybe (return id) ghcArgs root
+        GHC.runGhc (Just GHC.Paths.libdir) $ do
+            (dflags, _) <-
+                MonadUtils.liftIO . Packages.initPackages . applyXFlags xflags .
+                    (\d -> d { GHC.extraPkgConfs = extraPkgConfs
+                             , GHC.pkgDatabase   = Nothing
+                             , GHC.ghcLink       = GHC.LinkInMemory
+                             } ) =<< GHC.getSessionDynFlags
+            void $ GHC.setSessionDynFlags dflags
+            m
 
 --------------------------------------------------------------------------------
 
@@ -177,8 +180,9 @@ listModule' = do
 listModule :: C.CString -> IO C.CString
 listModule cfile =  do
     file <- C.peekCString cfile
-    mdl  <- runGHC file [] listModule'
-    newCStringFromBS . L.toStrict $ J.encode mdl
+    runGHC file [] listModule' >>= \case
+        Nothing  -> newCString "[]"
+        Just mdl -> newCStringFromBS . L.toStrict $ J.encode mdl
 
 --------------------------------------------------------------------------------
 
@@ -262,8 +266,9 @@ listFunctions arg = do
         [l]    -> ("<listFunctions>", T.encodeUtf8 l, [])
         [f,l]  -> (T.unpack f,        T.encodeUtf8 l, [])
         f:l:is -> (T.unpack f,        T.encodeUtf8 l, map T.unpack is)
-    runGHC file (parseXFlags xfs) (listFunctions' file is) >>=
-        newCStringFromBS . L.toStrict . J.encode 
+    runGHC file (parseXFlags xfs) (listFunctions' file is) >>= \case
+        Nothing -> newCString "[[], []]"
+        Just fs -> newCStringFromBS . L.toStrict $ J.encode fs
 
 --------------------------------------------------------------------------------
 
@@ -283,7 +288,7 @@ queryHash' = go . T.lines
 
 queryHash :: C.CString -> IO C.CInt
 queryHash cstr = S.unsafePackCString cstr >>= \bs -> 
-    fromIntegral <$> runGHC "queryHash" [] (queryHash' $ T.decodeUtf8 bs)
+    maybe 0 fromIntegral <$> runGHC "queryHash" [] (queryHash' $ T.decodeUtf8 bs)
 
 --------------------------------------------------------------------------------
 
