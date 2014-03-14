@@ -33,21 +33,21 @@ function! hassistant#mk_query() "{{{
   return expand('%:p') . "\n" . l:pragmas . "\n" . l:imports
 endfunction "}}}
 
-function! hassistant#cache_functions() "{{{
+function! hassistant#cache_names() "{{{
   if !exists('b:hassistant_cache_hash')
     let l:pandi   = hassistant#mk_query()
-    let [b:hassistant_functions_cache, b:hassistant_types_cache] = eval(libcall(g:hassistant_library, "listFunctions", l:pandi))
+    let [b:hassistant_types_cache, b:hassistant_data_cache, b:hassistant_functions_cache] = eval(libcall(g:hassistant_library, "listAllNames", l:pandi))
     let b:hassistant_cache_hash = libcallnr(g:hassistant_library, "queryHash", l:pandi)
   endif
 endfunction "}}}
 
-function! hassistant#recache_functions() "{{{
-  call hassistant#cache_functions()
+function! hassistant#recache_names() "{{{
+  call hassistant#cache_names()
   let l:pandi   = hassistant#mk_query()
   let l:curHash = libcallnr(g:hassistant_library, "queryHash", l:pandi)
 
   if b:hassistant_cache_hash != l:curHash
-    let [b:hassistant_functions_cache, b:hassistant_types_cache] = eval(libcall(g:hassistant_library, "listFunctions", l:pandi))
+    let [b:hassistant_types_cache, b:hassistant_data_cache, b:hassistant_functions_cache] = eval(libcall(g:hassistant_library, "listAllNames", l:pandi))
     let b:hassistant_cache_hash = libcallnr(g:hassistant_library, "queryHash", l:pandi)
   endif
 endfunction "}}}

@@ -1,6 +1,10 @@
-{-# LANGUAGE NoMonomorphismRestriction, ForeignFunctionInterface #-}
-{-# LANGUAGE OverloadedStrings, CPP, LambdaCase, StandaloneDeriving #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE ForeignFunctionInterface  #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE CPP                       #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE StandaloneDeriving        #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 
 module Hassistant where
 
@@ -28,47 +32,47 @@ import qualified Name
 import qualified HsExpr
 import qualified GHC.Paths
 
-import qualified Data.ByteString as S 
-import qualified Data.ByteString.Unsafe as S
-import qualified Data.ByteString.Char8 as SC
+import qualified Data.ByteString            as S
+import qualified Data.ByteString.Unsafe     as S
+import qualified Data.ByteString.Char8      as SC
 import qualified Data.ByteString.Lazy.Char8 as L
-import qualified Data.Text       as T
-import qualified Data.Text.IO    as T
-import qualified Data.Text.Encoding       as T
-import           Data.List
-import qualified Data.HashMap.Strict as H
-import qualified Data.Hashable as Hash
 
+import qualified Data.Text                  as T
+import qualified Data.Text.IO               as T
+import qualified Data.Text.Encoding         as T
+
+import qualified Data.HashMap.Strict        as H
+import qualified Data.Hashable              as Hash
+import qualified Data.IORef                 as IORef
+import qualified Data.Attoparsec            as P
+import qualified Data.Attoparsec.Char8      as PC
+import qualified Data.Aeson                 as J
+import           Data.List
 import           Data.Maybe
 import           Data.Either
-import qualified Data.IORef as IORef
+
 import qualified System.IO.Unsafe
+import qualified System.Directory           as D
+import qualified System.FilePath            as F
 
-import qualified Data.Attoparsec as P
-import qualified Data.Attoparsec.Char8 as PC
+import qualified Foreign.C                  as C
+import qualified Foreign.Marshal            as C
+import qualified Foreign.Storable           as C
 
-import qualified Foreign.C as C
-import qualified Foreign.Marshal as C
-import qualified Foreign.Storable as C
-
-import Control.Applicative
-import Control.Monad
-import Control.Monad.Trans.Maybe
-import Control.Monad.IO.Class
-import Control.Exception
-import qualified System.Directory as D
-import qualified System.FilePath  as F
-
-import qualified Data.Aeson as J
+import           Control.Applicative
+import           Control.Monad
+import           Control.Monad.Trans.Maybe
+import           Control.Monad.IO.Class
+import           Control.Exception
 
 #ifdef MODULE
-foreign export ccall listLANGUAGE  :: C.CString -> IO C.CString
-foreign export ccall getRoot       :: C.CString -> IO C.CString
-foreign export ccall listModule    :: C.CString -> IO C.CString
-foreign export ccall listFunctions :: C.CString -> IO C.CString
-foreign export ccall destruct      :: IO ()
-foreign export ccall queryHash :: C.CString -> IO C.CInt
+foreign export ccall listLANGUAGE      :: C.CString -> IO C.CString
+foreign export ccall getRoot           :: C.CString -> IO C.CString
+foreign export ccall listModule        :: C.CString -> IO C.CString
+foreign export ccall listAllNames      :: C.CString -> IO C.CString
 foreign export ccall listNamesInModule :: C.CString -> IO C.CString
+foreign export ccall queryHash         :: C.CString -> IO C.CInt
+foreign export ccall destruct          :: IO ()
 #endif
 
 destructors :: IORef.IORef [IO ()]
@@ -86,7 +90,8 @@ newCStringFromBS bs = S.unsafeUseAsCStringLen bs $ \(cstr, len) -> do
     return mem
 
 newCString :: String -> IO C.CString
-newCString s = C.newCString s >>= \mem -> IORef.atomicModifyIORef destructors (\ref -> (C.free mem: ref, ())) >> return mem
+newCString s = C.newCString s >>= \mem ->
+    IORef.atomicModifyIORef destructors (\ref -> (C.free mem: ref, ())) >> return mem
 
 --------------------------------------------------------------------------------
 
@@ -231,22 +236,28 @@ greToRdrNames RdrName.GRE {RdrName.gre_name = name, RdrName.gre_prov = prov }
 lookupRdrNames :: RdrName.GlobalRdrEnv -> Name.Name -> [RdrName.RdrName]
 lookupRdrNames gre name = concatMap greToRdrNames $ RdrName.lookupGRE_Name gre name
 
-listFunctions' :: FilePath -> [String] -> GhcMonad.Ghc [[H.HashMap T.Text String]]
-listFunctions' file importStr = GhcMonad.withSession $ \sess -> do
+listAllNames' :: FilePath -> [String] -> GhcMonad.Ghc ([H.HashMap T.Text String], [H.HashMap T.Text String], [H.HashMap T.Text String])
+listAllNames' file importStr = GhcMonad.withSession $ \sess -> do
     let df = HscTypes.hsc_dflags sess
     let prelude = if DynFlags.xopt DynFlags.Opt_ImplicitPrelude df
                       then ("import Prelude":)
                       else id
     GHC.setContext . map GHC.IIDecl . rights =<< mapM (parseModule file) (prelude importStr)
     names <- GHC.getNamesInScope
-    fs <- forM (filter (not . Name.isTyConName) names) $ \n -> do
+    let (tyCon, other) = span Name.isTyConName   names
+        (dCon, func)   = span Name.isDataConName other
+    fs <- forM func $ \n -> do
         typf <- typeKind =<< typeOf sess n
         word <- sdocToString (Outputable.ppr n)
-        return . H.fromList $ typf [("word", word), ("menu", nameMenu n)]
-    ts <- forM (filter Name.isTyConName names) $ \n -> do
+        return . H.fromList $ typf [("word", word), ("menu", "[Function]")]
+    ts <- forM tyCon $ \n -> do
         word <- sdocToString (Outputable.ppr n)
         return . H.fromList $ [("word", word), ("menu", "[TyCon]")]
-    return [fs, ts]
+    ds <- forM dCon $ \n -> do
+        typf <- typeKind =<< typeOf sess n
+        word <- sdocToString (Outputable.ppr n)
+        return . H.fromList $ typf [("word", word), ("menu", "[DataCon]")]
+    return (ts, ds, fs)
 
 nameMenu :: Name.Name -> String
 nameMenu n | Name.isDataConName n = "[DataCon]"
@@ -254,19 +265,19 @@ nameMenu n | Name.isDataConName n = "[DataCon]"
            | otherwise            = "[Function]"
 
 typeKind :: Maybe Type.Type -> GhcMonad.Ghc ([(T.Text, String)] -> [(T.Text, String)])
-typeKind  Nothing  = return id
+typeKind Nothing  = return id
 typeKind (Just t) = do
     typ <- sdocToString (Type.pprSigmaType t)
     return (("kind", (":: " ++ typ)):)
 
-listFunctions :: C.CString -> IO C.CString
-listFunctions arg = do
+listAllNames :: C.CString -> IO C.CString
+listAllNames arg = do
     (file, xfs, is) <- T.lines . T.decodeUtf8 <$> S.unsafePackCString arg >>= return . \case
-        []     -> ("<listFunctions>", "",             [])
-        [l]    -> ("<listFunctions>", T.encodeUtf8 l, [])
-        [f,l]  -> (T.unpack f,        T.encodeUtf8 l, [])
-        f:l:is -> (T.unpack f,        T.encodeUtf8 l, map T.unpack is)
-    runGHC file (parseXFlags xfs) (listFunctions' file is) >>= \case
+        []     -> ("<listAllNames>", "",             [])
+        [l]    -> ("<listAllNames>", T.encodeUtf8 l, [])
+        [f,l]  -> (T.unpack f,       T.encodeUtf8 l, [])
+        f:l:is -> (T.unpack f,       T.encodeUtf8 l, map T.unpack is)
+    runGHC file (parseXFlags xfs) (listAllNames' file is) >>= \case
         Nothing -> newCString "[[], []]"
         Just fs -> newCStringFromBS . L.toStrict $ J.encode fs
 
@@ -275,16 +286,15 @@ listFunctions arg = do
 queryHash' :: T.Text -> GhcMonad.Ghc Int
 queryHash' = go . T.lines
   where
-    defaultSalt = 0xdc36d1615b7400a4
-    xflags x    = foldl' Hash.hashWithSalt defaultSalt . map (\(On o) -> fromEnum o) $ filter isOn (parseXFlags x)
+    salt        = 0xdc36d1615b7400a4
+    xflags x    = foldl' Hash.hashWithSalt salt . sort . map (\(On o) -> fromEnum o) $ filter isOn (parseXFlags x)
     go []       = return $ Hash.hash (0::Int)
     go [x]      = return $ xflags (T.encodeUtf8 x)
     go [f,x]    = return $ Hash.hashWithSalt (xflags $ T.encodeUtf8 x) $ T.strip f
     go (f:x:is) = do
         df  <- GHC.getSessionDynFlags
-        pis <- rights <$> mapM (readModule df "" . T.unpack) is
-        can <- sdocToString $ Outputable.ppr pis
-        return $ Hash.hashWithSalt (Hash.hashWithSalt (xflags $ T.encodeUtf8 x) $ T.strip f) can
+        pis <- sdocToString . Outputable.ppr =<< rights <$> mapM (readModule df "" . T.unpack) is
+        return $ Hash.hashWithSalt (Hash.hashWithSalt (xflags $ T.encodeUtf8 x) $ T.strip f) (sort pis)
 
 queryHash :: C.CString -> IO C.CInt
 queryHash cstr = S.unsafePackCString cstr >>= \bs -> 
