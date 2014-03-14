@@ -12,12 +12,28 @@ features
 screenshots
 ==============
 
-![LANGUAGE pragma completion](img/LANGUAGE.png)
-![module completion](img/module.png)
+LANGUAGE Pragma
+------------
+![LANGUAGE pragma](img/LANGUAGE.png)
+
+module name
+------------
+![module name](img/module.png)
+
+function in module
+--------------
 ![functions in module completion](img/functions_in_module.png)
-![functions in module completion](img/functions_in_module.png)
-![functions completion](img/function.png)
-![qualified functions completion](img/qualified_function.png)
+
+function
+--------------
+![function](img/function.png)
+
+qualified function
+--------------
+![qualified function](img/qualified_function.png)
+
+type
+--------------
 ![type completion](img/type.png)
 
 installation
