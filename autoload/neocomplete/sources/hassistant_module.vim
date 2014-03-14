@@ -21,14 +21,24 @@ let s:source = {
       \}
 
 function! s:source.get_complete_position(context) "{{{
-  if a:context.input =~# '^import '
+  if a:context.input =~# '^import .*('
+    let a:context.in_module_function = 1
+    return neocomplete#helper#match_word(a:context.input)[0]
+  elseif a:context.input =~# '^import '
+    let a:context.in_module_function = 0
     return neocomplete#helper#match_word(a:context.input)[0]
   endif
   return -1
 endfunction "}}}
 
 function! s:source.gather_candidates(context) "{{{
-  return eval(libcall(g:hassistant_library, "listModule", expand('%:p')))
+  if a:context.in_module_function
+    let l:mdl = hassistant#get_moduleName(a:context.input)
+    echomsg l:mdl
+    return eval(libcall(g:hassistant_library, "listNamesInModule", l:mdl))
+  else 
+    return eval(libcall(g:hassistant_library, "listModule", expand('%:p')))
+  endif
 endfunction "}}}
 
 function! neocomplete#sources#hassistant_module#define() "{{{

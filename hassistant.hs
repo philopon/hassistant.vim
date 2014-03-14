@@ -1,6 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction, ForeignFunctionInterface #-}
 {-# LANGUAGE OverloadedStrings, CPP, LambdaCase, StandaloneDeriving #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, PackageImports #-}
 
 module Hassistant where
 
@@ -18,7 +18,9 @@ import qualified SrcLoc
 import qualified HscTypes
 import qualified FastString
 import qualified HsSyn
+import qualified Module
 import qualified Finder
+import qualified HsImpExp
 import qualified RdrName
 import qualified Type
 import qualified TcRnDriver
@@ -65,6 +67,7 @@ foreign export ccall listModule    :: C.CString -> IO C.CString
 foreign export ccall listFunctions :: C.CString -> IO C.CString
 foreign export ccall destruct      :: IO ()
 foreign export ccall queryHash :: C.CString -> IO C.CInt
+foreign export ccall listNamesInModule :: C.CString -> IO C.CString
 #endif
 
 destructors :: IORef.IORef [IO ()]
@@ -231,23 +234,26 @@ listFunctions' file importStr = GhcMonad.withSession $ \sess -> do
                       then ("import Prelude":)
                       else id
     GHC.setContext . map GHC.IIDecl . rights =<< mapM (parseModule file) (prelude importStr)
-    fNames <- filter (not . Name.isTyConName) <$> GHC.getNamesInScope
-    tNames <- filter Name.isTyConName <$> GHC.getNamesInScope
-    fs <- forM fNames $ \n -> do
+    names <- GHC.getNamesInScope
+    fs <- forM (filter (not . Name.isTyConName) names) $ \n -> do
         typf <- typeKind =<< typeOf sess n
         word <- sdocToString (Outputable.ppr n)
-        return . H.fromList $ typf [("word", word), ("menu", menu n)]
-    ts <- forM tNames $ \n -> do
+        return . H.fromList $ typf [("word", word), ("menu", nameMenu n)]
+    ts <- forM (filter Name.isTyConName names) $ \n -> do
         word <- sdocToString (Outputable.ppr n)
         return . H.fromList $ [("word", word), ("menu", "[TyCon]")]
     return [fs, ts]
 
-  where typeKind  Nothing  = return id
-        typeKind (Just t) = do
-            typ <- sdocToString (Type.pprSigmaType t)
-            return (("kind", (":: " ++ typ)):)
-        menu n | Name.isDataConName n = "[DataCon]"
-               | otherwise            = "[Function]"
+nameMenu :: Name.Name -> String
+nameMenu n | Name.isDataConName n = "[DataCon]"
+           | Name.isTyConName   n = "[TyCon]"
+           | otherwise            = "[Function]"
+
+typeKind :: Maybe Type.Type -> GhcMonad.Ghc ([(T.Text, String)] -> [(T.Text, String)])
+typeKind  Nothing  = return id
+typeKind (Just t) = do
+    typ <- sdocToString (Type.pprSigmaType t)
+    return (("kind", (":: " ++ typ)):)
 
 listFunctions :: C.CString -> IO C.CString
 listFunctions arg = do
@@ -258,6 +264,8 @@ listFunctions arg = do
         f:l:is -> (T.unpack f,        T.encodeUtf8 l, map T.unpack is)
     runGHC file (parseXFlags xfs) (listFunctions' file is) >>=
         newCStringFromBS . L.toStrict . J.encode 
+
+--------------------------------------------------------------------------------
 
 queryHash' :: T.Text -> GhcMonad.Ghc Int
 queryHash' = go . T.lines
@@ -276,6 +284,22 @@ queryHash' = go . T.lines
 queryHash :: C.CString -> IO C.CInt
 queryHash cstr = S.unsafePackCString cstr >>= \bs -> 
     fromIntegral <$> runGHC "queryHash" [] (queryHash' $ T.decodeUtf8 bs)
+
+--------------------------------------------------------------------------------
+
+listNamesInModule' :: Module.ModuleName -> GhcMonad.Ghc [H.HashMap T.Text String]
+listNamesInModule' moduleName = GhcMonad.withSession $ \sess -> do
+    GHC.setContext [HscTypes.IIDecl $ HsImpExp.simpleImportDecl moduleName]
+    names <- GHC.getNamesInScope
+    forM names $ \n -> do
+        typf <- typeKind =<< typeOf sess n
+        word <- sdocToString (Outputable.ppr n)
+        return . H.fromList $ typf [("word", word), ("menu", nameMenu n)]
+
+listNamesInModule :: C.CString -> IO C.CString
+listNamesInModule cstr = C.peekCString cstr >>= \str ->
+    runGHC "<listNamesInModule>" [] (listNamesInModule' $ Module.mkModuleName str) >>=
+    newCStringFromBS . L.toStrict . J.encode  
 
 --------------------------------------------------------------------------------
 

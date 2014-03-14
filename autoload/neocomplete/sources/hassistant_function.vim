@@ -20,16 +20,19 @@ let s:source = {
       \ 'min_pattern_length': 1,
       \}
 
-function! s:source.hooks.on_init(context)
+function! s:source.hooks.on_init(context) "{{{
   call hassistant#cache_functions()
   augroup hassistant_function
     autocmd! * <buffer>
     autocmd InsertLeave <buffer> call hassistant#recache_functions()
   augroup END
-endfunction
+endfunction "}}}
 
 function! s:source.get_complete_position(context) "{{{
-  return neocomplete#helper#match_word(a:context.input)[0]
+  if a:context.input !~# '^import '
+    return neocomplete#helper#match_word(a:context.input)[0]
+  endif
+  return -1
 endfunction "}}}
 
 function! s:source.gather_candidates(context) "{{{
