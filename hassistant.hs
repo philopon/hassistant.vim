@@ -279,7 +279,7 @@ listAllNames arg = do
         [f,l]  -> (T.unpack f,       T.encodeUtf8 l, [])
         f:l:is -> (T.unpack f,       T.encodeUtf8 l, map T.unpack is)
     runGHC file (parseXFlags xfs) (listAllNames' file is) >>= \case
-        Nothing -> newCString "[[], []]"
+        Nothing -> newCString "[[], [], []]"
         Just fs -> newCStringFromBS . L.toStrict $ J.encode fs
 
 --------------------------------------------------------------------------------

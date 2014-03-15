@@ -12,29 +12,32 @@ features
 screenshots
 ==============
 
+Completion
+-------------
+
 LANGUAGE Pragma
-------------
 ![LANGUAGE pragma](img/LANGUAGE.png)
 
 module name
-------------
 ![module name](img/module.png)
 
 function in module
---------------
 ![functions in module completion](img/functions_in_module.png)
 
 function
---------------
 ![function](img/function.png)
 
 qualified function
---------------
 ![qualified function](img/qualified_function.png)
 
 type
---------------
 ![type completion](img/type.png)
+
+Other
+-------------
+display type of cword.
+![display type of cword](img/cursor_type.png)
+
 
 installation
 ==============

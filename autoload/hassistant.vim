@@ -37,6 +37,11 @@ function! hassistant#cache_names() "{{{
   if !exists('b:hassistant_cache_hash')
     let l:pandi   = hassistant#mk_query()
     let [b:hassistant_types_cache, b:hassistant_data_cache, b:hassistant_functions_cache] = eval(libcall(g:hassistant_library, "listAllNames", l:pandi))
+    let b:hassistant_types = {}
+    for datum in b:hassistant_data_cache + b:hassistant_functions_cache
+      let b:hassistant_types[datum['word']] = datum['word'] . ' ' . datum['kind']
+    endfor
+
     let b:hassistant_cache_hash = libcallnr(g:hassistant_library, "queryHash", l:pandi)
   endif
 endfunction "}}}
