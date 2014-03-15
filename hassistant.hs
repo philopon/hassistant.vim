@@ -151,6 +151,7 @@ getRoot' :: FilePath -> IO (Maybe FilePath)
 getRoot' file = D.doesDirectoryExist file >>= \d -> runMaybeT $ go (if d then file else F.takeDirectory file)
   where 
     go "/" = MaybeT $ return Nothing
+    go "." = MaybeT $ return Nothing
     go dir = do 
         c <- liftIO $ D.getDirectoryContents dir
         if null $ filter rootFile c
