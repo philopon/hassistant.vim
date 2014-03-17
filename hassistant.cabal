@@ -36,3 +36,28 @@ executable hassistant.dylib
   cpp-options:         -DMODULE=Hassistant
   c-sources:           hassistant-wrapper.c
   default-language:    Haskell2010
+
+test-suite test
+  main-is:             test/test.hs
+  -- other-modules:       
+  type:                exitcode-stdio-1.0
+  build-depends:       base >=4.6 && <4.7
+                     , ghc
+                     , bytestring
+                     , ghc-paths
+                     , text
+                     , transformers
+                     , directory
+                     , aeson
+                     , filepath
+                     , attoparsec
+                     , template-haskell
+                     , unordered-containers
+                     , hashable
+
+                     , tasty
+                     , tasty-hunit
+  -- hs-source-dirs:      
+  ghc-options:         -O2 -Wall
+  cpp-options:         -DMODULE=Hassistant
+  default-language:    Haskell2010
