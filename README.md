@@ -58,5 +58,4 @@ TODO
 ==============
 * read package by PackageImports
 * cabal
-* type check
 
