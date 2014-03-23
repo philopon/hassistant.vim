@@ -34,10 +34,11 @@ function! hassistant#mk_query() "{{{
 endfunction "}}}
 
 function! hassistant#cache_names() "{{{
-    let l:pandi   = hassistant#mk_query()
+  let l:pandi   = hassistant#mk_query()
   let l:curHash = libcallnr(g:hassistant_library, "queryHash", l:pandi)
   if !exists('b:hassistant_cache_hash') || b:hassistant_cache_hash != l:curHash
     let [b:hassistant_types_cache, b:hassistant_data_cache, b:hassistant_functions_cache] = eval(libcall(g:hassistant_library, "listAllNames", l:pandi))
+    let b:hassistant_cache_hash = l:curHash
 
     let b:hassistant_types = {}
     for datum in b:hassistant_data_cache + b:hassistant_functions_cache
@@ -46,7 +47,7 @@ function! hassistant#cache_names() "{{{
   endif
 endfunction "}}}
 
-function! hassistant#get_type(name)
+function! hassistant#get_type(name) "{{{
   let l:type = get(b:hassistant_types, a:name, '')
   let l:max  = &columns * &cmdheight - 12
   if len(l:type) > l:max
@@ -54,7 +55,7 @@ function! hassistant#get_type(name)
   else 
     return l:type
   endif
-endfunction
+endfunction "}}}
 
 function! hassistant#get_moduleName(str) "{{{
   if a:str =~# ' ".*" '
