@@ -34,26 +34,21 @@ function! hassistant#mk_query() "{{{
 endfunction "}}}
 
 function! hassistant#cache_names() "{{{
-  if !exists('b:hassistant_cache_hash')
     let l:pandi   = hassistant#mk_query()
+  let l:curHash = libcallnr(g:hassistant_library, "queryHash", l:pandi)
+  if !exists('b:hassistant_cache_hash') || b:hassistant_cache_hash != l:curHash
     let [b:hassistant_types_cache, b:hassistant_data_cache, b:hassistant_functions_cache] = eval(libcall(g:hassistant_library, "listAllNames", l:pandi))
+
     let b:hassistant_types = {}
     for datum in b:hassistant_data_cache + b:hassistant_functions_cache
-      let b:hassistant_types[datum['word']] = datum['word'] . ' ' . datum['kind']
+      let l:out = datum['word'] . ' ' . datum['kind']
+      let l:max = &columns * &cmdheight - 12
+      if len(l:out) > l:max
+        let b:hassistant_types[datum['word']] = l:out[0:(l:max-5)] . ' ...'
+      else
+        let b:hassistant_types[datum['word']] = l:out
+      endif
     endfor
-
-    let b:hassistant_cache_hash = libcallnr(g:hassistant_library, "queryHash", l:pandi)
-  endif
-endfunction "}}}
-
-function! hassistant#recache_names() "{{{
-  call hassistant#cache_names()
-  let l:pandi   = hassistant#mk_query()
-  let l:curHash = libcallnr(g:hassistant_library, "queryHash", l:pandi)
-
-  if b:hassistant_cache_hash != l:curHash
-    let [b:hassistant_types_cache, b:hassistant_data_cache, b:hassistant_functions_cache] = eval(libcall(g:hassistant_library, "listAllNames", l:pandi))
-    let b:hassistant_cache_hash = libcallnr(g:hassistant_library, "queryHash", l:pandi)
   endif
 endfunction "}}}
 
