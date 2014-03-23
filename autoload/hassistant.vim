@@ -41,16 +41,20 @@ function! hassistant#cache_names() "{{{
 
     let b:hassistant_types = {}
     for datum in b:hassistant_data_cache + b:hassistant_functions_cache
-      let l:out = datum['word'] . ' ' . datum['kind']
-      let l:max = &columns * &cmdheight - 12
-      if len(l:out) > l:max
-        let b:hassistant_types[datum['word']] = l:out[0:(l:max-5)] . ' ...'
-      else
-        let b:hassistant_types[datum['word']] = l:out
-      endif
+      let b:hassistant_types[datum['word']] = datum['word'] . ' ' . datum['kind']
     endfor
   endif
 endfunction "}}}
+
+function! hassistant#get_type(name)
+  let l:type = get(b:hassistant_types, a:name, '')
+  let l:max  = &columns * &cmdheight - 12
+  if len(l:type) > l:max
+    return l:type[0:(l:max-5)] . ' ...'
+  else 
+    return l:type
+  endif
+endfunction
 
 function! hassistant#get_moduleName(str) "{{{
   if a:str =~# ' ".*" '

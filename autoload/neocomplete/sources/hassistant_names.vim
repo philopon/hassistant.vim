@@ -25,7 +25,7 @@ function! s:source.hooks.on_init(context) "{{{
   augroup hassistant_names
     autocmd! * <buffer>
     autocmd InsertLeave <buffer> call hassistant#cache_names()
-    autocmd CursorMoved,CursorMovedI <buffer> echo get(b:hassistant_types, expand('<cword>'), '')
+    autocmd CursorMoved,CursorMovedI <buffer> echo hassistant#get_type(expand('<cword>'))
   augroup END
 endfunction "}}}
 
