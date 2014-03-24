@@ -18,6 +18,8 @@ endif
 call neocomplete#custom#source('hassistant_function', 'converters',
       \ ['converter_remove_overlap', 'converter_case', 'converter_abbr'])
 
+autocmd FileType haskell call hassistant#initialize()
+"    autocmd CursorMoved,CursorMovedI <buffer> echo hassistant#get_type(expand('<cword>'))
 let &cpo = s:save_cpo
 unlet s:save_cpo
 

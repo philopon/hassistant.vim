@@ -47,6 +47,18 @@ function! hassistant#cache_names() "{{{
   endif
 endfunction "}}}
 
+function! hassistant#initialize() "{{{
+  autocmd CursorHold,CursorHoldI   <buffer> call hassistant#cache_names()
+  autocmd CursorMoved,CursorMovedI <buffer> call hassistant#echo_type(expand('<cword>'))
+endfunction "}}}
+
+function! hassistant#echo_type(name) "{{{
+  if exists('b:hassistant_types') && (!exists("b:hassistant_last_type") || b:hassistant_last_type != a:name)
+    echo hassistant#get_type(a:name)
+    let b:hassistant_last_type = a:name
+  endif
+endfunction "}}}
+
 function! hassistant#get_type(name) "{{{
   let l:type = get(b:hassistant_types, a:name, '')
   let l:max  = &columns * &cmdheight - 12
