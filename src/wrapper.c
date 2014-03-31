@@ -4,14 +4,13 @@
 #define XSTR(a) #a
  
 #include <HsFFI.h>
-#include "hassistant_stub.h"
+#include "library_stub.h"
  
 extern void CAT(__stginit_, MODULE)(void);
  
 static void library_init(void) __attribute__((constructor));
 static void library_init(void)
 {
-  /* This seems to be a no-op, but it makes the GHCRTS envvar work. */
   static char *argv[] = { 0 }, **argv_ = argv;
   static int argc = 0;
 

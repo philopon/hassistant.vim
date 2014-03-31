@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-cabal sandbox init
+[ ! -e cabal.sandbox.config ] && cabal sandbox init
 cabal install --disable-library-profiling --disable-executable-profiling --disable-library-for-ghci --disable-documentation

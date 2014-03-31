@@ -11,73 +11,101 @@ let g:loaded_hassistant_autoload = 1
 let s:save_cpo = &cpo
 set cpo&vim
 
-function! hassistant#get_language_pragma_and_imports () "{{{
-  let l:lnum    = 1
-  let l:pragmas = []
-  let l:imports = []
-  while l:lnum < line('$')
-    let l:line = getline(l:lnum)
-    if l:line =~# '\C^\s*{-#\s*LANGUAGE'
-      call add(l:pragmas, l:line[matchend(l:line, '\C^\s*{-#\s*LANGUAGE\s*'):match(l:line, '\s*#-}') - 1])
+function! hassistant#file_hash() "{{{
+  return libcallnr(g:hassistant_executable_directory . "library.so", "hashFile", expand('%'))
+endfunction "}}}
+
+function! hassistant#get_imports() "{{{
+  let buf  = ""
+  let lnum = 1
+  let eob  = line('$')
+  while 1
+    let line = getline(lnum)
+    if line =~# '^import ' || lnum > eob
+      break
     endif
-    if l:line =~# '\C^import '
-      call add(l:imports, l:line)
-    endif
-    let l:lnum += 1
+    let lnum += 1
   endwhile
-  return [join(l:pragmas, ','), join(imports, "\n")]
+
+  while 1
+    let line = getline(lnum)
+    let buf = buf . "\n" . line
+    if line !~# '^\(import \| \|$\|#\)' || lnum > eob
+      break
+    endif
+    let lnum += 1
+  endwhile
+  return buf
 endfunction "}}}
 
-function! hassistant#mk_query() "{{{
-  let [l:pragmas, l:imports] = hassistant#get_language_pragma_and_imports()
-  return expand('%:p') . "\n" . l:pragmas . "\n" . l:imports
+function! hassistant#string_hash(str) "{{{
+  return libcallnr(g:hassistant_executable_directory . "library.so", "hash", a:str)
 endfunction "}}}
 
-function! hassistant#cache_names() "{{{
-  let l:pandi   = hassistant#mk_query()
-  let l:curHash = libcallnr(g:hassistant_library, "queryHash", l:pandi)
-  if !exists('b:hassistant_cache_hash') || b:hassistant_cache_hash != l:curHash
-    let [b:hassistant_types_cache, b:hassistant_data_cache, b:hassistant_functions_cache] = eval(libcall(g:hassistant_library, "listAllNames", l:pandi))
-    let b:hassistant_cache_hash = l:curHash
+function! hassistant#buffer_hash() "{{{
+  let imp = hassistant#get_imports()
+  return hassistant#string_hash(imp)
+endfunction "}}}
 
-    let b:hassistant_types = {}
-    for datum in b:hassistant_data_cache + b:hassistant_functions_cache
-      let b:hassistant_types[datum['word']] = datum['word'] . ' ' . datum['kind']
+function! hassistant#start_type_process() "{{{
+  if exists('b:hassistant_process')
+    return 1
+  endif
+  let hash = hassistant#buffer_hash()
+  if exists('b:hassistant_hash') && b:hassistant_hash == hash
+    return 2
+  endif
+  let b:hassistant_tmp     = ''
+  let b:hassistant_hash    = hash
+  let b:hassistant_process = vimproc#popen2(g:hassistant_executable_directory . "types " . expand('%'))
+  let imp = hassistant#get_imports()
+  call b:hassistant_process.stdin.write(imp)
+  call b:hassistant_process.stdin.close()
+  return 0
+endfunction "}}}
+
+function! hassistant#finish_type_process() "{{{
+  if !exists('b:hassistant_process')
+    return 1
+  endif
+  call  b:hassistant_process.stdout.close()
+  call  b:hassistant_process.waitpid()
+  unlet b:hassistant_process
+  return 0
+endfunction "}}}
+
+function! hassistant#check_type_process() "{{{
+  if !exists('b:hassistant_process')
+    return 1
+  endif
+  let b:hassistant_tmp = b:hassistant_tmp . b:hassistant_process.stdout.read()
+  if b:hassistant_process.stdout.eof
+    call hassistant#finish_type_process()
+    let b:hassistant_types = eval(split(b:hassistant_tmp, "\n")[0])
+    let b:hassistant_dict = {}
+    for c in b:hassistant_types
+      let b:hassistant_dict[c.word] = c.kind
     endfor
+    unlet b:hassistant_tmp
+    return 0
   endif
+  return -1
 endfunction "}}}
 
-function! hassistant#initialize() "{{{
-  autocmd CursorHold,CursorHoldI   <buffer> call hassistant#cache_names()
-  autocmd CursorMoved,CursorMovedI <buffer> call hassistant#echo_type(expand('<cword>'))
-endfunction "}}}
-
-function! hassistant#echo_type(name) "{{{
-  if exists('b:hassistant_types') && (!exists("b:hassistant_last_type") || b:hassistant_last_type != a:name)
-    echo hassistant#get_type(a:name)
-    let b:hassistant_last_type = a:name
+function! hassistant#get_type(word) "{{{
+  if exists('b:hassistant_dict')
+    let unk = get(b:hassistant_dict, a:word, 1)
+    if !unk
+      let max = &columns * &cmdheight - 12
+      let typ = a:word . ' :: ' . unk
+      if len(typ) > max
+        return typ[0:(max-5)] . ' ...'
+      else
+        return typ
+      endif
+    endif
   endif
-endfunction "}}}
-
-function! hassistant#get_type(name) "{{{
-  let l:type = get(b:hassistant_types, a:name, '')
-  let l:max  = &columns * &cmdheight - 12
-  if len(l:type) > l:max
-    return l:type[0:(l:max-5)] . ' ...'
-  else 
-    return l:type
-  endif
-endfunction "}}}
-
-function! hassistant#get_moduleName(str) "{{{
-  if a:str =~# ' ".*" '
-    return matchstr(a:str, '\<[A-Za-z0-9.]*\>', matchend(a:str, ' ".*" '))
-  elseif a:str =~# '\C \<qualified\> '
-    return matchstr(a:str, '\<[A-Za-z0-9.]*\>', matchend(a:str, '\C \<qualified\> '))
-  elseif a:str =~# '\C^import '
-    return matchstr(a:str, '\<[A-Za-z0-9.]*\>', matchend(a:str, '\C^import\> '))
-  endif
-  return 1
+  return ""
 endfunction "}}}
 
 let &cpo = s:save_cpo

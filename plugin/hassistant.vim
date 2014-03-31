@@ -1,8 +1,3 @@
-" hassistant
-" Version: 0.0.1
-" Author: 
-" License: 
-
 if exists('g:loaded_hassistant')
   finish
 endif
@@ -11,16 +6,16 @@ let g:loaded_hassistant = 1
 let s:save_cpo = &cpo
 set cpo&vim
 
-if !exists('g:hassistant_library')
-  let g:hassistant_library = expand('<sfile>:p:h:h') . '/.cabal-sandbox/bin/hassistant.dylib'
+if !exists('g:hassistant_executable_directory')
+  let g:hassistant_executable_directory = expand('<sfile>:h') . '/../.cabal-sandbox/bin/'
 endif
 
-call neocomplete#custom#source('hassistant_function', 'converters',
-      \ ['converter_remove_overlap', 'converter_case', 'converter_abbr'])
+augroup Hassistant
+  autocmd!
+  autocmd FileType haskell call hassistant#start_type_process()
+  autocmd FileType haskell autocmd InsertLeave <buffer> call hassistant#start_type_process()
+  autocmd FileType haskell autocmd CursorMoved,CursorMovedI <buffer> echo hassistant#get_type(expand('<cword>'))
+augroup END
 
-autocmd FileType haskell call hassistant#initialize()
-"    autocmd CursorMoved,CursorMovedI <buffer> echo hassistant#get_type(expand('<cword>'))
 let &cpo = s:save_cpo
 unlet s:save_cpo
-
-" vim:set et:
