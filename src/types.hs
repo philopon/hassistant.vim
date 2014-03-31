@@ -2,17 +2,18 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TupleSections #-}
 
 import qualified GHC
 import qualified Exception
 import qualified Outputable
-import qualified HscTypes
 import qualified RdrName
-import qualified Name
 import qualified OccName
 import MonadUtils (MonadIO(liftIO))
 import qualified GHC.Paths
 
+import Control.Monad
 import Control.Applicative
 
 import System.IO
@@ -49,68 +50,61 @@ main = GHC.runGhc (Just GHC.Paths.libdir) $ liftIO getArgs >>= \case
                 }
 
         is     <- imports <$> liftIO T.getContents
+        let prelude = "import Prelude"
         
         idecls <- catMaybes <$> mapM (\i -> fmap Just (GHC.parseImportDecl i)
-            `GHC.gcatch` (\(_::Exception.SomeException) -> return Nothing)) is
+            `GHC.gcatch` (\(_::Exception.SomeException) -> return Nothing)) (prelude:is)
 
-        ms <- catMaybes <$> mapM (\i -> (fmap Just . findModule . GHC.unLoc . GHC.ideclName) i
+        ms <- catMaybes <$>
+            mapM (\i -> (fmap (Just . (i,)) . findModule . GHC.unLoc . GHC.ideclName) i
             `GHC.gcatch` (\(_::Exception.SomeException) -> return Nothing)) idecls
-
-        GHC.setContext $ GHC.IIDecl (GHC.simpleImportDecl $ GHC.mkModuleName "Prelude"): 
-            map (GHC.IIDecl . GHC.simpleImportDecl . GHC.moduleName) ms
 
         uq <- GHC.getPrintUnqual
 
-        sess <- GHC.getSession
-        let gre = HscTypes.ic_rn_gbl_env $ HscTypes.hsc_IC sess 
+        GHC.setContext $ map (GHC.IIDecl . GHC.simpleImportDecl . GHC.moduleName . snd) ms
 
-        GHC.getNamesInScope >>= mapM (mkCandidate uq dyn gre) >>=
-                liftIO . L.putStrLn . Json.encode . concat
+        cs <- fmap concat $ forM ms $ \(idecl, mdl) -> GHC.getModuleInfo mdl >>= \case
+            Just mi -> concat <$> mapM (\name -> GHC.lookupName name >>= \case
+                Just tyThing -> do
+                    let rdrs = rdrNames idecl name
+                    return $ mapMaybe (\rdr -> mkCandidate dyn uq mdl rdr tyThing) rdrs
+                Nothing -> return []
+                ) (GHC.modInfoExports mi)
+            Nothing -> return []
+        liftIO . L.putStrLn $ Json.encode cs
 
     _ -> liftIO $ putStrLn "USAGE: types file"
 
-mkCandidate :: GHC.GhcMonad m => Outputable.PrintUnqualified -> GHC.DynFlags
-            -> OccName.OccEnv [RdrName.GlobalRdrElt] -> GHC.Name -> m [Json.Value]
-mkCandidate uq dyn gre name = do
-    let rdr = concatMap greToRdrNames $ RdrName.lookupGRE_Name gre name
-    GHC.lookupName name >>= \case
-        Just (GHC.AnId i)     -> return $
-            map (\n -> Json.object [ "word" Json..= ppr n
-                                   , "kind" Json..= pprType (GHC.idType i)
-                                   , "menu" Json..= ppr (GHC.nameModule name)
-                                   ]) rdr
-        Just (GHC.ADataCon c) -> return $
-            map (\n -> Json.object [ "word" Json..= ppr n
-                                   , "kind" Json..= pprType (GHC.dataConType c)
-                                   , "menu" Json..= ppr (GHC.dataConTyCon c)
-                                   ]) rdr
-        Just (GHC.ATyCon c)   -> case GHC.tyConClass_maybe c of 
-            Nothing  -> return $
-                map (\n -> Json.object [ "word" Json..= ppr n
+rdrNames :: GHC.ImportDecl GHC.RdrName -> GHC.Name -> [GHC.RdrName]
+rdrNames GHC.ImportDecl{GHC.ideclName, GHC.ideclQualified, GHC.ideclAs} name = case ideclAs of
+    Nothing -> let qual = RdrName.Qual (GHC.unLoc ideclName) (OccName.occName name)
+               in if ideclQualified 
+                  then [qual]
+                  else [RdrName.Unqual (OccName.occName name), qual]
+    Just as -> let qual = RdrName.Qual as (OccName.occName name)
+               in if ideclQualified
+                  then [qual]
+                  else [RdrName.Unqual (OccName.occName name), qual]
+
+mkCandidate :: GHC.DynFlags -> Outputable.PrintUnqualified
+            -> GHC.Module -> GHC.RdrName -> GHC.TyThing -> Maybe Json.Value
+mkCandidate dyn uq mdl rdr tyThing = case tyThing of
+    (GHC.AnId i)     -> Just $ Json.object [ "word" Json..= ppr rdr
+                                           , "kind" Json..= pprType (GHC.idType i)
+                                           , "menu" Json..= ppr mdl ]
+    (GHC.ADataCon c) -> Just $ Json.object [ "word" Json..= ppr rdr
+                                           , "kind" Json..= pprType (GHC.dataConType c)
+                                           , "menu" Json..= ppr (GHC.dataConTyCon c) ]
+    (GHC.ATyCon c)   -> case GHC.tyConClass_maybe c of 
+        Nothing  -> Just $ Json.object [ "word" Json..= ppr rdr
                                        , "kind" Json..= ppr (GHC.tyConDataCons c)
-                                       , "menu" Json..= Json.String "[TyCon]"
-                                       ]) rdr
-            Just cls -> return $
-                map (\n -> Json.object [ "word" Json..= ppr n
+                                       , "menu" Json..= Json.String "[TyCon]" ]
+        Just cls -> Just $ Json.object [ "word" Json..= ppr rdr
                                        , "kind" Json..= ppr (GHC.classMethods cls)
-                                       , "menu" Json..= Json.String "[Class]"
-                                       ]) rdr
-        _ -> return []
+                                       , "menu" Json..= Json.String "[Class]" ]
+    _ -> Nothing
 
   where
     ppr = Json.String . T.pack . showSDoc uq dyn . Outputable.ppr
     pprType = ppr . snd . GHC.splitForAllTys
 
--- copy from InteractiveEval
-greToRdrNames :: RdrName.GlobalRdrElt -> [GHC.RdrName]
-greToRdrNames RdrName.GRE{ RdrName.gre_name = name, RdrName.gre_prov = prov }
-  = case prov of
-     RdrName.LocalDef -> [unqual]
-     RdrName.Imported specs -> concat (map do_spec (map RdrName.is_decl specs))
-  where
-    occ = Name.nameOccName name
-    unqual = RdrName.Unqual occ
-    do_spec decl_spec
-        | RdrName.is_qual decl_spec = [qual]
-        | otherwise                 = [unqual,qual]
-        where qual = RdrName.Qual (RdrName.is_as decl_spec) occ
