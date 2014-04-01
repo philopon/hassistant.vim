@@ -6,16 +6,16 @@
 
 module Hassistant.Module where
 
-import qualified GHC
 import MonadUtils (MonadIO(liftIO))
+import qualified GHC
 import qualified Finder
 import qualified RdrName
 import qualified OccName
 import qualified HscTypes
 import qualified DynFlags
 import qualified Module
-import qualified GHC.Paths
 import qualified Outputable
+import qualified GHC.Paths
 
 import Control.Monad
 import Control.Applicative
@@ -132,10 +132,10 @@ parenHasOccName ho = OccName.parenSymOcc occ (Outputable.ppr occ)
 
 listNamesInModule' :: GHC.GhcMonad m => GHC.DynFlags -> P.FilePath -> T.Text -> m [NamesInModule String String]
 listNamesInModule' = gListModule $ \mi -> do
-    dyn <- GHC.getSessionDynFlags
-    let xp = GHC.modInfoExports mi
-    tyThings <- catMaybes <$> mapM (GHC.modInfoLookupName mi) xp
-    Just uq <- GHC.mkPrintUnqualifiedForModule mi
+    let xp    = GHC.modInfoExports mi
+    dyn      <- GHC.getSessionDynFlags
+    tyThings <- catMaybes <$> mapM GHC.lookupName xp
+    Just uq  <- GHC.mkPrintUnqualifiedForModule mi
     return $ mapMaybe (fmap (ppr uq dyn) . tyThingToNamesInModule) tyThings
   where
     ppr     uq dyn = fmapTypes (pprType uq dyn) . fmap (showSDoc uq dyn . parenHasOccName)
