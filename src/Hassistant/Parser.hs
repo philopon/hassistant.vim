@@ -16,10 +16,19 @@ isHsSymbol c = not special && sym
   where special = A.inClass "(),;[]`{}_:\"'" c
         sym     = Char.isSymbol c || Char.isPunctuation c
 
+qualified :: A.Parser T.Text -> A.Parser T.Text
+qualified p = q <|> p
+  where 
+    q = do
+        mdl <- moduleNameP
+        optional (A.char '.' *> p) >>= return . \case
+            Nothing -> mdl
+            Just b  -> mdl `T.append` ('.' `T.cons` b)
+
 varid :: A.Parser T.Text
 varid = T.cons <$> A.satisfy Char.isLower <*> A.takeWhile p
   where
-    p c = Char.isUpper c || Char.isLower c || Char.isDigit c || (c == '\'')
+    p c = Char.isUpper c || Char.isLower c || Char.isDigit c || (A.inClass "'_" c)
 
 conid :: A.Parser T.Text
 conid = T.cons <$> A.satisfy Char.isUpper <*> A.takeWhile p
@@ -153,13 +162,14 @@ positionTopLevelP = A.skipWhile (A.inClass "a-z") *> A.endOfInput
 hsLexP :: A.Parser [(Int, T.Text, Int)]
 hsLexP = many $ (,,) <$> space <*> token <*> space
   where
-    sp    = T.singleton <$> (A.choice $ map A.char "(),;[]`{}")
+    sp    = T.singleton <$> (A.satisfy (A.inClass "(),;[]`{}"))
     resop = A.choice . map A.string $ 
         [ "..", "::", ":" , "=", "\\", "|", "<-", "->", "@", "~" ]
 
     paren st bd ed = (\a b c -> a `T.cons` b `T.snoc` c) <$> A.char st <*> bd <*> A.char ed
 
-    token = varid <|> conid <|> sym <|> cSym <|> lit <|> sp <|> resop 
+    token = qualified (varid <|> conid <|> sym <|> cSym <|> par sym <|> par cSym) <|> lit <|> sp <|> resop 
+    par p = (\a -> '(' `T.cons` a `T.snoc` ')') <$> (A.char '(' *> p <* A.char ')')
     sym   = A.takeWhile1 isHsSymbol
     cSym  = T.cons <$> A.char ':' <*> sym
 
