@@ -135,11 +135,11 @@ listNamesInModule' = gListModule $ \mi -> do
     let xp    = GHC.modInfoExports mi
     dyn      <- GHC.getSessionDynFlags
     tyThings <- catMaybes <$> mapM GHC.lookupName xp
-    Just uq  <- GHC.mkPrintUnqualifiedForModule mi
-    return $ mapMaybe (fmap (ppr uq dyn) . tyThingToNamesInModule) tyThings
+    return $ mapMaybe (fmap (ppr dyn) . tyThingToNamesInModule) tyThings
   where
-    ppr     uq dyn = fmapTypes (pprType uq dyn) . fmap (showSDoc uq dyn . parenHasOccName)
-    pprType uq dyn = showSDoc uq dyn . Outputable.ppr . snd . GHC.splitForAllTys
+    ppr     dyn = fmapTypes (pprType dyn) .
+                  fmap (showSDoc Outputable.neverQualify dyn . parenHasOccName)
+    pprType dyn = showSDoc Outputable.neverQualify dyn . Outputable.ppr . snd . GHC.splitForAllTys
 
 listNamesInModule :: P.FilePath -> T.Text -> IO [NamesInModule String String]
 listNamesInModule file mdl = GHC.runGhc (Just GHC.Paths.libdir) $ do
