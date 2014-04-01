@@ -100,7 +100,7 @@ positionP =
     (positionNamesInModule <$> positionNamesInModuleP) <|>
     (positionMode Module   <$> positionModuleP) <|>
     (positionMode TopLevel <$> (0 <$ positionTopLevelP)) <|>
-    (positionMode Other    <$> positionOtherP)
+    (positionOther         <$> positionOtherP)
   where
     positionNamesInModule (m,i) = L.toStrict . Json.encode . Json.object $
         [ "mode"     Json..= fromEnum NamesInModule
@@ -112,6 +112,11 @@ positionP =
         , "position"    Json..= i
         , "module"      Json..= m
         , "constructor" Json..= n
+        ]
+    positionOther (typ, i) = L.toStrict . Json.encode . Json.object $
+        [ "mode"     Json..= fromEnum Other
+        , "position" Json..= i
+        , "type"     Json..= (if typ then 1 else 0 :: Int)
         ]
 
 positionMode :: Mode -> Int -> S.ByteString

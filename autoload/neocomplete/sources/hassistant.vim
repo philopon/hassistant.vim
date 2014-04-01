@@ -34,10 +34,11 @@ function! s:source.gather_candidates(context) "{{{
   elseif a:context.ret.mode == g:hassistant_modes.TopLevel
     return eval(libcall(g:hassistant_executable_directory . "library.so", "gatherTopLevel", 0))
   elseif  a:context.ret.mode == g:hassistant_modes.Other
-    if exists('b:hassistant_types')
-      return deepcopy(b:hassistant_types)
+    if a:context.ret.type
+      return deepcopy( get(b:, 'hassistant_types', []) )
+    else
+      return deepcopy( get(b:, 'hassistant_types', []) + get(b:, 'hassistant_vars', []))
     endif
-    return []
   else
     return []
   endif

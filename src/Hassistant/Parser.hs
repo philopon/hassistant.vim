@@ -160,7 +160,6 @@ hsLexP = many $ (,,) <$> space <*> token <*> space
     paren st bd ed = (\a b c -> a `T.cons` b `T.snoc` c) <$> A.char st <*> bd <*> A.char ed
 
     token = varid <|> conid <|> sym <|> cSym <|> lit <|> sp <|> resop 
-    -- <|> resop <|> op <|> pop <|> num <|> char <|> str
     sym   = A.takeWhile1 isHsSymbol
     cSym  = T.cons <$> A.char ':' <*> sym
 
@@ -173,9 +172,11 @@ hsLexP = many $ (,,) <$> space <*> token <*> space
         ed <- A.char '"'
         return $ op `T.cons` T.concat bd `T.snoc` ed
 
-positionOtherP :: A.Parser Int
+positionOtherP :: A.Parser (Bool, Int)
 positionOtherP = do
     (bf,_,_):is <- reverse <$> hsLexP 
-    return $ sum (map len is) + bf
+    let typ = "::" `elem` map center is
+    return (typ, sum (map len is) + bf)
   where 
     len (bf,b,af) = bf + T.length b + af
+    center (_,c,_) = c

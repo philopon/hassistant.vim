@@ -25,6 +25,7 @@ import qualified Data.Aeson as Json
 import qualified Data.ByteString.Lazy.Char8 as L
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Data.Either
 import Data.Maybe
 
 import Hassistant.Directory
@@ -69,7 +70,10 @@ main = GHC.runGhc (Just GHC.Paths.libdir) $ liftIO getArgs >>= \case
                 Nothing -> return []
                 ) (GHC.modInfoExports mi)
             Nothing -> return []
-        liftIO . L.putStrLn $ Json.encode (Dict kind cs, cs)
+
+        let fs = lefts  cs
+            ts = rights cs
+        liftIO . L.putStrLn $ Json.encode (Dict kind $ fs ++ ts, fs, ts)
 
     _ -> liftIO $ putStrLn "USAGE: types file"
 
@@ -84,13 +88,13 @@ rdrNames GHC.ImportDecl{GHC.ideclName, GHC.ideclQualified, GHC.ideclAs} name = c
                   then [qual]
                   else [RdrName.Unqual (OccName.occName name), qual]
 
-mkCandidate :: GHC.DynFlags -> GHC.Module -> GHC.RdrName -> GHC.TyThing -> Maybe Candidate
+mkCandidate :: GHC.DynFlags -> GHC.Module -> GHC.RdrName -> GHC.TyThing -> Maybe (Either Candidate Candidate)
 mkCandidate dyn mdl rdr tyThing = case tyThing of
-    (GHC.AnId     i) -> Just $ wkm (ppr rdr) (pprType $ GHC.idType i) (ppr mdl)
-    (GHC.ADataCon c) -> Just $ wkm (ppr rdr) (pprType $ GHC.dataConType c) (ppr $ GHC.dataConTyCon c)
+    (GHC.AnId     i) -> Just . Left $ wkm (ppr rdr) (pprType $ GHC.idType i) (ppr mdl)
+    (GHC.ADataCon c) -> Just . Left $ wkm (ppr rdr) (pprType $ GHC.dataConType c) (ppr $ GHC.dataConTyCon c)
     (GHC.ATyCon   c) -> case GHC.tyConClass_maybe c of
-        Nothing  -> Just $ wkm (ppr rdr) (ppr $ GHC.tyConDataCons c)  "[TyCon]"
-        Just cls -> Just $ wkm (ppr rdr) (ppr $ GHC.classMethods cls) "[Class]"
+        Nothing  -> Just . Right $ wkm (ppr rdr) (ppr $ GHC.tyConDataCons c)  "[TyCon]"
+        Just cls -> Just . Right $ wkm (ppr rdr) (ppr $ GHC.classMethods cls) "[Class]"
     _ -> Nothing
   where
     wkm w k m = (candidate w) {kind = Just k, menu = Just m}
