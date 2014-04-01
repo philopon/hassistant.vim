@@ -33,9 +33,17 @@ import Hassistant.Imports
 import Hassistant.Module
 import Hassistant.Common
 
+data ExecMode = Normal
+              | Debug
+              deriving (Eq)
+
 main :: IO ()
 main = GHC.runGhc (Just GHC.Paths.libdir) $ liftIO getArgs >>= \case
-    [file] -> do
+    file:other -> do
+        let execMode = case other of
+                ["debug"] -> Debug
+                _         -> Normal
+
         liftIO $ hSetBuffering stdout (BlockBuffering $ Just 100)
         dyn <- GHC.getSessionDynFlags
         (base,mbgpd) <- liftIO $ getBaseSrcAndCabal (P.decodeString file)
@@ -54,7 +62,8 @@ main = GHC.runGhc (Just GHC.Paths.libdir) $ liftIO getArgs >>= \case
         let prelude = "import Prelude"
         
         idecls <- catMaybes <$> mapM (\i -> fmap Just (GHC.parseImportDecl i)
-            `GHC.gcatch` (\(_::Exception.SomeException) -> return Nothing)) (prelude:is)
+            `GHC.gcatch` (\(_::Exception.SomeException) -> return Nothing)) 
+            (if execMode == Debug then is else prelude:is)
 
         ms <- catMaybes <$>
             mapM (\i -> (fmap (Just . (i,)) . findModule . GHC.unLoc . GHC.ideclName) i
@@ -73,7 +82,10 @@ main = GHC.runGhc (Just GHC.Paths.libdir) $ liftIO getArgs >>= \case
 
         let fs = lefts  cs
             ts = rights cs
-        liftIO . L.putStrLn $ Json.encode (Dict kind $ fs ++ ts, fs, ts)
+
+        if execMode == Debug
+            then mapM_ (liftIO . print) (fs ++ ts)
+            else liftIO . L.putStrLn $ Json.encode (Dict kind $ fs ++ ts, fs, ts)
 
     _ -> liftIO $ putStrLn "USAGE: types file"
 
