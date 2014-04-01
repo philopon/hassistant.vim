@@ -35,17 +35,18 @@ import Hassistant.LANGUAGE
 import Hassistant.Module
 
 #ifdef MODULE
-foreign export ccall destruct            :: IO ()
+foreign export ccall destruct                 :: IO ()
 
-foreign export ccall hashFile            :: CFilePath -> IO CInt
-foreign export ccall hash                :: CString   -> IO CInt
+foreign export ccall hashFile                 :: CFilePath -> IO CInt
+foreign export ccall hash                     :: CString   -> IO CInt
 
-foreign export ccall position            :: CString -> IO CString
+foreign export ccall position                 :: CString   -> IO CString
 
-foreign export ccall gatherLANGUAGE           :: CString -> IO CString
-foreign export ccall gatherModule             :: CString -> IO CString
-foreign export ccall gatherNamesInModule      :: CString -> IO CString
-foreign export ccall gatherNamesInConstructor :: CString -> IO CString
+foreign export ccall gatherLANGUAGE           :: CString   -> IO CString
+foreign export ccall gatherModule             :: CString   -> IO CString
+foreign export ccall gatherNamesInModule      :: CString   -> IO CString
+foreign export ccall gatherNamesInConstructor :: CString   -> IO CString
+foreign export ccall gatherTopLevel           :: CString   -> IO CString
 #endif
 
 type CFilePath = CString
@@ -83,7 +84,8 @@ positionP =
     (positionMode 1        <$> positionLanguageP) <|>
     (positionNamesInConst  <$> positionNamesInConstructorP) <|>
     (positionNamesInModule <$> positionNamesInModuleP) <|>
-    (positionMode 4        <$> positionModuleP)
+    (positionMode 4        <$> positionModuleP) <|>
+    (positionMode 5        <$> (0 <$ positionTopLevelP))
   where
     positionNamesInModule (m,i) = L.toStrict . Json.encode . Json.object $
         [ "mode"     Json..= (2 :: Int)
@@ -152,3 +154,8 @@ gatherNamesInConstructor query = do
     cand (Var         _ _ ) = []
     cand (Constructor c ds) = map (\(d,t) -> wkm d t c) ds
     cand (Class       c ms) = map (\(m,t) -> wkm m t c) ms
+
+gatherTopLevel :: CString -> IO CString
+gatherTopLevel _ = newCStringFromBS . L.toStrict . Json.encode $ map cand topLevels
+  where
+    cand c = (candidate c){ menu = Just "[top]" }

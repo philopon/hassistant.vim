@@ -59,3 +59,11 @@ instance Json.ToJSON Dict where
     toJSON (Dict a cs) = Json.object $ mapMaybe object cs
       where 
         object c = (word c Json..=) <$> (a c)
+
+topLevels :: [T.Text]
+topLevels = 
+    [ "class",    "data",   "import"
+    , "infix",    "infixl", "infixr"
+    , "instance", "module", "newtype"
+    ]
+

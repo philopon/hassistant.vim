@@ -34,6 +34,8 @@ function! s:source.gather_candidates(context) "{{{
     return  eval(libcall(g:hassistant_executable_directory . "library.so", "gatherNamesInConstructor", expand('%') . "\n" . a:context.ret.module . "\n" . a:context.ret.constructor))
   elseif a:context.ret.mode == 4
     return eval(libcall(g:hassistant_executable_directory . "library.so", "gatherModule", expand('%')))
+  elseif a:context.ret.mode == 5
+    return eval(libcall(g:hassistant_executable_directory . "library.so", "gatherTopLevel", 0))
   else
     if exists('b:hassistant_types')
       return deepcopy(b:hassistant_types)

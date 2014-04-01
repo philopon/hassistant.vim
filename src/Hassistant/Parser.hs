@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE LambdaCase #-}
 
 module Hassistant.Parser where
@@ -147,4 +146,7 @@ positionNamesInConstructorP = do
     sp2          <- space
     (lp,_)       <- lastOfList (A.takeWhile (/= ',')) ','
     return (mdl, ieParent ie, size ie + pos + sp1 + sp2 + lp + 1)
+
+positionTopLevelP :: A.Parser ()
+positionTopLevelP = A.skipWhile (A.inClass "a-z") *> A.endOfInput
 
