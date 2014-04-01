@@ -75,7 +75,8 @@ main = GHC.runGhc (Just GHC.Paths.libdir) $ liftIO getArgs >>= \case
             Just mi -> concat <$> mapM (\name -> GHC.lookupName name >>= \case
                 Just tyThing -> do
                     let rdrs = rdrNames idecl name
-                    return $ mapMaybe (\rdr -> mkCandidate dyn mdl rdr tyThing) rdrs
+                        mn   = ideclShortModuleName idecl
+                    return $ mapMaybe (\rdr -> mkCandidate dyn mn rdr tyThing) rdrs
                 Nothing -> return []
                 ) (GHC.modInfoExports mi)
             Nothing -> return []
@@ -89,6 +90,11 @@ main = GHC.runGhc (Just GHC.Paths.libdir) $ liftIO getArgs >>= \case
 
     _ -> liftIO $ putStrLn "USAGE: types file"
 
+ideclShortModuleName :: GHC.ImportDecl t -> GHC.ModuleName
+ideclShortModuleName GHC.ImportDecl{GHC.ideclName, GHC.ideclAs} = case ideclAs of
+    Nothing -> GHC.unLoc ideclName
+    Just n  -> n
+
 rdrNames :: GHC.ImportDecl GHC.RdrName -> GHC.Name -> [GHC.RdrName]
 rdrNames GHC.ImportDecl{GHC.ideclName, GHC.ideclQualified, GHC.ideclAs} name = case ideclAs of
     Nothing -> let qual = RdrName.Qual (GHC.unLoc ideclName) (OccName.occName name)
@@ -100,16 +106,17 @@ rdrNames GHC.ImportDecl{GHC.ideclName, GHC.ideclQualified, GHC.ideclAs} name = c
                   then [qual]
                   else [RdrName.Unqual (OccName.occName name), qual]
 
-mkCandidate :: GHC.DynFlags -> GHC.Module -> GHC.RdrName -> GHC.TyThing -> Maybe (Either Candidate Candidate)
+mkCandidate :: GHC.DynFlags -> GHC.ModuleName -> GHC.RdrName -> GHC.TyThing -> Maybe (Either Candidate Candidate)
 mkCandidate dyn mdl rdr tyThing = case tyThing of
     (GHC.AnId     i) -> Just . Left $ wkm (ppr rdr) (pprType $ GHC.idType i) (ppr mdl)
     (GHC.ADataCon c) -> Just . Left $ wkm (ppr rdr) (pprType $ GHC.dataConType c) (ppr $ GHC.dataConTyCon c)
     (GHC.ATyCon   c) -> case GHC.tyConClass_maybe c of
-        Nothing  -> Just . Right $ wkm (ppr rdr) (ppr $ GHC.tyConDataCons c)  "[TyCon]"
-        Just cls -> Just . Right $ wkm (ppr rdr) (ppr $ GHC.classMethods cls) "[Class]"
+        Nothing  -> Just . Right $ wkm (ppr rdr) (ppConc . map ppr $ GHC.tyConDataCons c)  (ppr mdl)
+        Just cls -> Just . Right $ wkm (ppr rdr) (ppConc . map ppr $ GHC.classMethods cls) (ppr mdl)
     _ -> Nothing
   where
     wkm w k m = (candidate w) {kind = Just k, menu = Just m}
-    ppr = T.pack . showSDoc Outputable.neverQualify dyn . Outputable.ppr
-    pprType = ppr . snd . GHC.splitForAllTys
+    ppConc s  = '(' `T.cons` T.intercalate "," s `T.snoc` ')'
+    ppr       = T.pack . showSDoc Outputable.neverQualify dyn . Outputable.ppr
+    pprType   = ppr . snd . GHC.splitForAllTys
 
