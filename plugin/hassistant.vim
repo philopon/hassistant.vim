@@ -9,6 +9,7 @@ set cpo&vim
 if !exists('g:hassistant_executable_directory')
   let g:hassistant_executable_directory = expand('<sfile>:h') . '/../.cabal-sandbox/bin/'
 endif
+let g:hassistant_modes = eval(libcall(g:hassistant_executable_directory . "library.so", "listModes", 0))
 
 augroup Hassistant
   autocmd!

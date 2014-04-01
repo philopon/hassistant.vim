@@ -40,6 +40,8 @@ foreign export ccall destruct                 :: IO ()
 foreign export ccall hashFile                 :: CFilePath -> IO CInt
 foreign export ccall hash                     :: CString   -> IO CInt
 
+foreign export ccall listModes                :: CString   -> IO CString
+
 foreign export ccall position                 :: CString   -> IO CString
 
 foreign export ccall gatherLANGUAGE           :: CString   -> IO CString
@@ -79,37 +81,53 @@ hash ccont = do
 
 --------------------------------------------------------------------------------
 
+data Mode = None
+          | LANGUAGE
+          | NamesInConstructor
+          | NamesInModule
+          | Module
+          | TopLevel
+          | Other
+          deriving (Show, Eq, Enum, Bounded)
+
+modes :: [Mode]
+modes = [minBound .. maxBound]
+
 positionP :: A.Parser S.ByteString
 positionP = 
-    (positionMode 1        <$> positionLanguageP) <|>
+    (positionMode LANGUAGE <$> positionLanguageP) <|>
     (positionNamesInConst  <$> positionNamesInConstructorP) <|>
     (positionNamesInModule <$> positionNamesInModuleP) <|>
-    (positionMode 4        <$> positionModuleP) <|>
-    (positionMode 5        <$> (0 <$ positionTopLevelP)) <|>
-    (positionMode (-1)     <$> positionOtherP)
+    (positionMode Module   <$> positionModuleP) <|>
+    (positionMode TopLevel <$> (0 <$ positionTopLevelP)) <|>
+    (positionMode Other    <$> positionOtherP)
   where
     positionNamesInModule (m,i) = L.toStrict . Json.encode . Json.object $
-        [ "mode"     Json..= (2 :: Int)
+        [ "mode"     Json..= fromEnum NamesInModule
         , "position" Json..= i
         , "module"   Json..= m 
         ]
     positionNamesInConst (m,n,i) = L.toStrict . Json.encode . Json.object $
-        [ "mode"        Json..= (3 :: Int)
+        [ "mode"        Json..= fromEnum NamesInConstructor
         , "position"    Json..= i
         , "module"      Json..= m
         , "constructor" Json..= n
         ]
 
-positionMode :: Int -> Int -> S.ByteString
+positionMode :: Mode -> Int -> S.ByteString
 positionMode m p = L.toStrict . Json.encode . Json.object $
-    ["mode" Json..= m, "position" Json..= p]
+    ["mode" Json..= fromEnum m, "position" Json..= p]
 
 position :: CString -> IO CString
 position cstr = do
     txt <- unsafePackCStringToText cstr
     case A.parseOnly positionP txt of
         Right r -> newCStringFromBS r
-        Left  _ -> newCStringFromBS $ positionMode 0 (-1)
+        Left  _ -> newCStringFromBS $ positionMode None (-1)
+
+listModes :: CString -> IO CString
+listModes _ = newCStringFromBS . L.toStrict . Json.encode . Json.object $ 
+    map (\m -> T.pack (show m) Json..= fromEnum m) modes 
 
 gatherLANGUAGE :: CString -> IO CString
 gatherLANGUAGE _ = newCStringFromBS . L.toStrict $ Json.encode listLANGAUGE

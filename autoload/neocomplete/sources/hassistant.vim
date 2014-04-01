@@ -23,20 +23,22 @@ function! s:source.get_complete_position(context) "{{{
 endfunction "}}}
 
 function! s:source.gather_candidates(context) "{{{
-  if a:context.ret.mode == 1
+  if a:context.ret.mode == g:hassistant_modes.LANGUAGE
     return eval(libcall(g:hassistant_executable_directory . "library.so", "gatherLANGUAGE", 0))
-  elseif a:context.ret.mode == 2
+  elseif a:context.ret.mode == g:hassistant_modes.NamesInModule
     return eval(libcall(g:hassistant_executable_directory . "library.so", "gatherNamesInModule", expand('%') . "\n" . a:context.ret.module))
-  elseif a:context.ret.mode == 3
+  elseif a:context.ret.mode == g:hassistant_modes.NamesInConstructor
     return  eval(libcall(g:hassistant_executable_directory . "library.so", "gatherNamesInConstructor", expand('%') . "\n" . a:context.ret.module . "\n" . a:context.ret.constructor))
-  elseif a:context.ret.mode == 4
+  elseif a:context.ret.mode == g:hassistant_modes.Module
     return eval(libcall(g:hassistant_executable_directory . "library.so", "gatherModule", expand('%')))
-  elseif a:context.ret.mode == 5
+  elseif a:context.ret.mode == g:hassistant_modes.TopLevel
     return eval(libcall(g:hassistant_executable_directory . "library.so", "gatherTopLevel", 0))
-  else
+  elseif  a:context.ret.mode == g:hassistant_modes.Other
     if exists('b:hassistant_types')
       return deepcopy(b:hassistant_types)
     endif
+    return []
+  else
     return []
   endif
 endfunction "}}}
