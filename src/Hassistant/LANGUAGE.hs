@@ -11,7 +11,7 @@ import Hassistant.Common
 
 listLANGAUGE :: [Candidate]
 listLANGAUGE =
-    let obj s = (candidate $ T.pack s) { menu = Just "[LANGAUGE]" }
+    let obj s = (candidate $ T.pack s) { menu = Just "LANGAUGE" }
     in concatMap (\(s,_,_) -> [obj s, obj $ "No" ++ s]) DynFlags.xFlags
 
 languageChar :: [Char]

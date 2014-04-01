@@ -48,7 +48,7 @@ instance Json.ToJSON Candidate where
         Json.object $ (:) ("word" Json..= word) $
             maybe id (add "abbr") abbr $
             maybe id (add "kind") kind $
-            maybe id (add "menu") menu $
+            maybe id (add "menu" . T.cons '[' . flip T.snoc ']') menu $
             maybe id (add "info") info $
             maybe id (add "rank") rank $ []
       where add s = ((:) . (s Json..=))

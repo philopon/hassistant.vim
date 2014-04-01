@@ -144,8 +144,8 @@ gatherModule file = do
         listModule p `catch` (\(_::SomeException) -> return [])
   where
     wkm w k m = (candidate $ T.pack w) { kind = Just $ T.pack k, menu = Just m }
-    cand mdl Nothing    =  wkm mdl "(file)" "[Module]"
-    cand mdl (Just pkg) = (wkm mdl pkg      "[Module]") { rank = Just 250 }
+    cand mdl Nothing    =  wkm mdl "(file)" "Module"
+    cand mdl (Just pkg) = (wkm mdl pkg      "Module") { rank = Just 250 }
 
 gatherNamesInModule :: CString -> IO CString
 gatherNamesInModule query = do
@@ -158,10 +158,10 @@ gatherNamesInModule query = do
     wkm w k m = (candidate $ T.pack w) { kind = Just $ T.pack k, menu = Just m }
     ppDC s = '(' : (intercalate "," s) ++ ")"
 
-    cand (Var         n t ) = [wkm n t "[Function]"]
-    cand (Constructor t ds) = wkm t (ppDC $ map fst ds) "[TyCon]" : 
-                              map (\(d,_) -> wkm d t "[DataCon]") ds
-    cand (Class       c ms) = wkm c (ppDC $ map fst ms) "[Class]" : 
+    cand (Var         n t ) = [wkm n t "Function"]
+    cand (Constructor t ds) = wkm t (ppDC $ map fst ds) "TyCon" : 
+                              map (\(d,_) -> wkm d t "DataCon") ds
+    cand (Class       c ms) = wkm c (ppDC $ map fst ms) "Class" : 
                               map (\(d,t) -> wkm d t (T.pack c)) ms
 
 gatherNamesInConstructor :: CString -> IO CString
@@ -182,4 +182,4 @@ gatherNamesInConstructor query = do
 gatherTopLevel :: CString -> IO CString
 gatherTopLevel _ = newCStringFromBS . L.toStrict . Json.encode $ map cand topLevels
   where
-    cand c = (candidate c){ menu = Just "[top]" }
+    cand c = (candidate c){ menu = Just "top" }
