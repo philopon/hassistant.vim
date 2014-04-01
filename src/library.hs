@@ -85,7 +85,8 @@ positionP =
     (positionNamesInConst  <$> positionNamesInConstructorP) <|>
     (positionNamesInModule <$> positionNamesInModuleP) <|>
     (positionMode 4        <$> positionModuleP) <|>
-    (positionMode 5        <$> (0 <$ positionTopLevelP))
+    (positionMode 5        <$> (0 <$ positionTopLevelP)) <|>
+    (positionMode (-1)     <$> positionOtherP)
   where
     positionNamesInModule (m,i) = L.toStrict . Json.encode . Json.object $
         [ "mode"     Json..= (2 :: Int)

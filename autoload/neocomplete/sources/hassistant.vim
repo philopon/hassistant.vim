@@ -19,9 +19,6 @@ function! s:source.get_complete_position(context) "{{{
   call hassistant#check_type_process()
   let ret = eval(libcall(g:hassistant_executable_directory . "library.so", "position", a:context.input))
   let a:context.ret = ret
-  if ret.mode == 0
-    return neocomplete#helper#match_word(a:context.input)[0]
-  endif
   return ret.position
 endfunction "}}}
 

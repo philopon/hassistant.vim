@@ -150,3 +150,32 @@ positionNamesInConstructorP = do
 positionTopLevelP :: A.Parser ()
 positionTopLevelP = A.skipWhile (A.inClass "a-z") *> A.endOfInput
 
+hsLexP :: A.Parser [(Int, T.Text, Int)]
+hsLexP = many $ (,,) <$> space <*> token <*> space
+  where
+    sp    = T.singleton <$> (A.choice $ map A.char "(),;[]`{}")
+    resop = A.choice . map A.string $ 
+        [ "..", "::", ":" , "=", "\\", "|", "<-", "->", "@", "~" ]
+
+    paren st bd ed = (\a b c -> a `T.cons` b `T.snoc` c) <$> A.char st <*> bd <*> A.char ed
+
+    token = varid <|> conid <|> sym <|> cSym <|> lit <|> sp <|> resop 
+    -- <|> resop <|> op <|> pop <|> num <|> char <|> str
+    sym   = A.takeWhile1 isHsSymbol
+    cSym  = T.cons <$> A.char ':' <*> sym
+
+    lit   = num <|> char <|> str
+    num   = A.takeWhile1 (A.inClass "-0-9.+eE")
+    char  = paren '\'' (T.singleton <$> A.anyChar) '\''
+    str   = do
+        op <- A.char '"'
+        bd <- many $ A.string "\\\"" <|> (T.singleton <$> A.notChar '"')
+        ed <- A.char '"'
+        return $ op `T.cons` T.concat bd `T.snoc` ed
+
+positionOtherP :: A.Parser Int
+positionOtherP = do
+    (bf,_,_):is <- reverse <$> hsLexP 
+    return $ sum (map len is) + bf
+  where 
+    len (bf,b,af) = bf + T.length b + af
