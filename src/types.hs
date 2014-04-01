@@ -59,19 +59,17 @@ main = GHC.runGhc (Just GHC.Paths.libdir) $ liftIO getArgs >>= \case
             mapM (\i -> (fmap (Just . (i,)) . findModule . GHC.unLoc . GHC.ideclName) i
             `GHC.gcatch` (\(_::Exception.SomeException) -> return Nothing)) idecls
 
-        uq <- GHC.getPrintUnqual
-
         GHC.setContext $ map (GHC.IIDecl . GHC.simpleImportDecl . GHC.moduleName . snd) ms
 
         cs <- fmap concat $ forM ms $ \(idecl, mdl) -> GHC.getModuleInfo mdl >>= \case
             Just mi -> concat <$> mapM (\name -> GHC.lookupName name >>= \case
                 Just tyThing -> do
                     let rdrs = rdrNames idecl name
-                    return $ mapMaybe (\rdr -> mkCandidate dyn uq mdl rdr tyThing) rdrs
+                    return $ mapMaybe (\rdr -> mkCandidate dyn mdl rdr tyThing) rdrs
                 Nothing -> return []
                 ) (GHC.modInfoExports mi)
             Nothing -> return []
-        liftIO . L.putStrLn $ Json.encode cs
+        liftIO . L.putStrLn $ Json.encode (Dict kind cs, cs)
 
     _ -> liftIO $ putStrLn "USAGE: types file"
 
@@ -86,25 +84,16 @@ rdrNames GHC.ImportDecl{GHC.ideclName, GHC.ideclQualified, GHC.ideclAs} name = c
                   then [qual]
                   else [RdrName.Unqual (OccName.occName name), qual]
 
-mkCandidate :: GHC.DynFlags -> Outputable.PrintUnqualified
-            -> GHC.Module -> GHC.RdrName -> GHC.TyThing -> Maybe Json.Value
-mkCandidate dyn uq mdl rdr tyThing = case tyThing of
-    (GHC.AnId i)     -> Just $ Json.object [ "word" Json..= ppr rdr
-                                           , "kind" Json..= pprType (GHC.idType i)
-                                           , "menu" Json..= ppr mdl ]
-    (GHC.ADataCon c) -> Just $ Json.object [ "word" Json..= ppr rdr
-                                           , "kind" Json..= pprType (GHC.dataConType c)
-                                           , "menu" Json..= ppr (GHC.dataConTyCon c) ]
-    (GHC.ATyCon c)   -> case GHC.tyConClass_maybe c of 
-        Nothing  -> Just $ Json.object [ "word" Json..= ppr rdr
-                                       , "kind" Json..= ppr (GHC.tyConDataCons c)
-                                       , "menu" Json..= Json.String "[TyCon]" ]
-        Just cls -> Just $ Json.object [ "word" Json..= ppr rdr
-                                       , "kind" Json..= ppr (GHC.classMethods cls)
-                                       , "menu" Json..= Json.String "[Class]" ]
+mkCandidate :: GHC.DynFlags -> GHC.Module -> GHC.RdrName -> GHC.TyThing -> Maybe Candidate
+mkCandidate dyn mdl rdr tyThing = case tyThing of
+    (GHC.AnId     i) -> Just $ wkm (ppr rdr) (pprType $ GHC.idType i) (ppr mdl)
+    (GHC.ADataCon c) -> Just $ wkm (ppr rdr) (pprType $ GHC.dataConType c) (ppr $ GHC.dataConTyCon c)
+    (GHC.ATyCon   c) -> case GHC.tyConClass_maybe c of
+        Nothing  -> Just $ wkm (ppr rdr) (ppr $ GHC.tyConDataCons c)  "[TyCon]"
+        Just cls -> Just $ wkm (ppr rdr) (ppr $ GHC.classMethods cls) "[Class]"
     _ -> Nothing
-
   where
-    ppr = Json.String . T.pack . showSDoc uq dyn . Outputable.ppr
+    wkm w k m = (candidate w) {kind = Just k, menu = Just m}
+    ppr = T.pack . showSDoc Outputable.neverQualify dyn . Outputable.ppr
     pprType = ppr . snd . GHC.splitForAllTys
 

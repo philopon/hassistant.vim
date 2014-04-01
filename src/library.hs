@@ -25,6 +25,7 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Unsafe as U
 import qualified Data.Aeson   as Json
 import Data.Word (Word8)
+import Data.List
 import qualified Data.Attoparsec.Text as A
 
 import Hassistant.Imports
@@ -51,7 +52,6 @@ type CFilePath = CString
 
 destructors :: MVar [IO ()]
 destructors = unsafePerformIO $ newMVar []
-
 
 newCStringFromBS :: S.ByteString -> IO CString
 newCStringFromBS bs = U.unsafeUseAsCStringLen bs $ \(src, len) -> do
@@ -109,53 +109,46 @@ position cstr = do
         Left  _ -> newCStringFromBS $ positionMode 0 (-1)
 
 gatherLANGUAGE :: CString -> IO CString
-gatherLANGUAGE _ = newCStringFromBS neocompleteLANGAUGE
+gatherLANGUAGE _ = newCStringFromBS . L.toStrict $ Json.encode listLANGAUGE
 
 gatherModule :: CString -> IO CString
 gatherModule file = do
     p  <- P.fromText <$> unsafePackCStringToText file
-    newCStringFromBS . L.toStrict . Json.encode . map ppMod =<< 
+    newCStringFromBS . L.toStrict . Json.encode . map (uncurry cand) =<< 
         listModule p `catch` (\(_::SomeException) -> return [])
   where
-    ppMod (m, mbP) = Json.object .
-                     maybe (("rank" Json..= (250::Int)):) (const id) mbP $
-                     [ "word" Json..= m
-                     , "kind" Json..= maybe "(file)" id mbP
-                     , "menu" Json..= Json.String "[Module]"
-                     ]
+    wkm w k m = (candidate $ T.pack w) { kind = Just $ T.pack k, menu = Just m }
+    cand mdl Nothing    =  wkm mdl "(file)" "[Module]"
+    cand mdl (Just pkg) = (wkm mdl pkg      "[Module]") { rank = Just 250 }
 
 gatherNamesInModule :: CString -> IO CString
 gatherNamesInModule query = do
     lbs <- (T.lines <$> unsafePackCStringToText query) >>= \case
-        [file, mdl] -> Json.encode . concatMap ppName <$>
+        [file, mdl] -> Json.encode . concatMap cand <$>
             listNamesInModule (P.fromText file) mdl `catch` (\(_::SomeException) -> return [])
         _           -> return $ Json.encode ([] :: [Json.Value])
     newCStringFromBS $ L.toStrict lbs
   where
-    menu s = "menu" Json..= Json.String ('[' `T.cons` s `T.snoc` ']')
-    ppDC s = '(' `T.cons` T.intercalate "," (map T.pack s) `T.snoc` ')'
-    ppName (Var n t) =
-        [Json.object [ "word" Json..= n, menu "Variable", "kind" Json..= T.pack t]]
-    ppName (Constructor t ds) =
-        Json.object [ "word" Json..= T.pack t, menu "TyCon", "kind" Json..= ppDC (map fst ds)] :
-        map (\(d,_) -> Json.object ["word" Json..= T.pack d, menu "DataCon", "kind" Json..= T.pack t]) ds
-    ppName (Class c m) =
-        Json.object [ "word" Json..= T.pack c, menu "Class", "kind" Json..= ppDC (map fst m)] :
-        map (\(d,t) -> Json.object ["word" Json..= T.pack d, menu (T.pack c), "kind" Json..= T.pack t]) m
+    wkm w k m = (candidate $ T.pack w) { kind = Just $ T.pack k, menu = Just m }
+    ppDC s = '(' : (intercalate "," s) ++ ")"
+
+    cand (Var         n t ) = [wkm n t "[Function]"]
+    cand (Constructor t ds) = wkm t (ppDC $ map fst ds) "[TyCon]" : 
+                              map (\(d,_) -> wkm d t "[DataCon]") ds
+    cand (Class       c ms) = wkm c (ppDC $ map fst ms) "[Class]" : 
+                              map (\(d,t) -> wkm d t (T.pack c)) ms
 
 gatherNamesInConstructor :: CString -> IO CString
 gatherNamesInConstructor query = do
     lbs <- (T.lines <$> unsafePackCStringToText query) >>= \case
         [file, mdl, cnst] -> Json.encode <$> 
-            (maybe [] ppName <$> listNamesInConstructor (P.fromText file) mdl (T.unpack cnst))
+            (maybe [] cand <$> listNamesInConstructor (P.fromText file) mdl (T.unpack cnst))
             `catch` (\(_::SomeException) -> return [])
 
         _           -> return $ Json.encode ([] :: [Json.Value])
     newCStringFromBS $ L.toStrict lbs
   where
-    menu s = "menu" Json..= Json.String ('[' `T.cons` s `T.snoc` ']')
-    ppName (Var _ _) = []
-    ppName (Constructor c ds) =
-        map (\(d,t) -> Json.object ["word" Json..= d, menu (T.pack c), "kind" Json..= T.pack t]) ds
-    ppName (Class c ms) =
-        map (\(m,t) -> Json.object ["word" Json..= m, menu (T.pack c), "kind" Json..= T.pack t]) ms
+    wkm w k m = (candidate $ T.pack w) { kind = Just $ T.pack k, menu = Just $ T.pack m }
+    cand (Var         _ _ ) = []
+    cand (Constructor c ds) = map (\(d,t) -> wkm d t c) ds
+    cand (Class       c ms) = map (\(m,t) -> wkm m t c) ms

@@ -81,11 +81,7 @@ function! hassistant#check_type_process() "{{{
   let b:hassistant_tmp = b:hassistant_tmp . b:hassistant_process.stdout.read()
   if b:hassistant_process.stdout.eof
     call hassistant#finish_type_process()
-    let b:hassistant_types = eval(split(b:hassistant_tmp, "\n")[0])
-    let b:hassistant_dict = {}
-    for c in b:hassistant_types
-      let b:hassistant_dict[c.word] = c.kind
-    endfor
+    let [b:hassistant_dict, b:hassistant_types] = eval(split(b:hassistant_tmp, "\n")[0])
     unlet b:hassistant_tmp
     return 0
   endif
