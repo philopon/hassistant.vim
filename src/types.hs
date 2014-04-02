@@ -17,10 +17,12 @@ import Control.Monad
 import Control.Applicative
 
 import System.IO
+import System.Exit
 import System.Environment (getArgs)
 
 import qualified Filesystem.Path.CurrentOS as P
 
+import qualified Data.Attoparsec.Text as A
 import qualified Data.Aeson as Json
 import qualified Data.ByteString.Lazy.Char8 as L
 import qualified Data.Text as T
@@ -32,63 +34,78 @@ import Hassistant.Directory
 import Hassistant.Imports
 import Hassistant.Module
 import Hassistant.Common
+import Hassistant.Parser
 
 data ExecMode = Normal
               | Debug
               deriving (Eq)
 
 main :: IO ()
-main = GHC.runGhc (Just GHC.Paths.libdir) $ liftIO getArgs >>= \case
-    file:other -> do
-        let execMode = case other of
-                ["debug"] -> Debug
-                _         -> Normal
+main = getArgs >>= \case
+    [file]         -> T.getContents >>= runGHC . types file Normal
+    [file,"debug"] -> T.getContents >>= runGHC . types file Debug
+    [_,"lex"]      -> T.getContents >>= runLexer
+    _              -> putStrLn help
+  where 
+    runGHC = GHC.runGhc (Just GHC.Paths.libdir)
+    help   = unlines 
+        [ "USAGE: types file"
+        , "       types file    debug"
+        , "       types ignored lex"
+        ]
 
-        liftIO $ hSetBuffering stdout (BlockBuffering $ Just 100)
-        dyn <- GHC.getSessionDynFlags
-        (base,mbgpd) <- liftIO $ getBaseSrcAndCabal (P.decodeString file)
+runLexer :: T.Text -> IO ()
+runLexer input = case A.parseOnly hsLexP input of
+    Left e  -> putStrLn e        >> exitFailure
+    Right r -> mapM_ printElem r >> exitSuccess
+  where
+    printElem (sp,e) = putStr (show sp) >> putChar '\t' >> T.putStrLn e
 
-        let ps = maybe [] hsLibraryPackages mbgpd
+types :: GHC.GhcMonad m => String -> ExecMode -> T.Text -> m ()
+types file execMode input = do
+    liftIO $ hSetBuffering stdout (BlockBuffering $ Just 100)
+    dyn <- GHC.getSessionDynFlags
+    (base,mbgpd) <- liftIO $ getBaseSrcAndCabal (P.decodeString file)
 
-        extraPC <- liftIO $ extraPkgConfs base
-        _ <- GHC.setSessionDynFlags $
-            dyn { GHC.extraPkgConfs = extraPC
-                , GHC.pkgDatabase   = Nothing
-                , GHC.ghcLink       = GHC.NoLink
-                , GHC.packageFlags  = ps
-                }
+    let ps = maybe [] hsLibraryPackages mbgpd
 
-        is     <- imports <$> liftIO T.getContents
-        let prelude = "import Prelude"
-        
-        idecls <- catMaybes <$> mapM (\i -> fmap Just (GHC.parseImportDecl i)
-            `GHC.gcatch` (\(_::Exception.SomeException) -> return Nothing)) 
-            (if execMode == Debug then is else prelude:is)
+    extraPC <- liftIO $ extraPkgConfs base
+    _ <- GHC.setSessionDynFlags $
+        dyn { GHC.extraPkgConfs = extraPC
+            , GHC.pkgDatabase   = Nothing
+            , GHC.ghcLink       = GHC.NoLink
+            , GHC.packageFlags  = ps
+            }
 
-        ms <- catMaybes <$>
-            mapM (\i -> (fmap (Just . (i,)) . findModule . GHC.unLoc . GHC.ideclName) i
-            `GHC.gcatch` (\(_::Exception.SomeException) -> return Nothing)) idecls
+    let is = (if execMode == Debug then id else ("import Prelude":)) $
+             imports input
+    
+    idecls <- catMaybes <$> mapM (\i -> fmap Just (GHC.parseImportDecl i)
+        `GHC.gcatch` (\(_::Exception.SomeException) -> return Nothing)) is
 
-        GHC.setContext $ map (GHC.IIDecl . GHC.simpleImportDecl . GHC.moduleName . snd) ms
+    ms <- catMaybes <$>
+        mapM (\i -> (fmap (Just . (i,)) . findModule . GHC.unLoc . GHC.ideclName) i
+        `GHC.gcatch` (\(_::Exception.SomeException) -> return Nothing)) idecls
 
-        cs <- fmap concat $ forM ms $ \(idecl, mdl) -> GHC.getModuleInfo mdl >>= \case
-            Just mi -> concat <$> mapM (\name -> GHC.lookupName name >>= \case
-                Just tyThing -> do
-                    let rdrs = rdrNames idecl name
-                        mn   = ideclShortModuleName idecl
-                    return $ mapMaybe (\rdr -> mkCandidate dyn mn rdr tyThing) rdrs
-                Nothing -> return []
-                ) (GHC.modInfoExports mi)
+    GHC.setContext $ map (GHC.IIDecl . GHC.simpleImportDecl . GHC.moduleName . snd) ms
+
+    cs <- fmap concat $ forM ms $ \(idecl, mdl) -> GHC.getModuleInfo mdl >>= \case
+        Just mi -> concat <$> mapM (\name -> GHC.lookupName name >>= \case
+            Just tyThing -> do
+                let rdrs = rdrNames idecl name
+                    mn   = ideclShortModuleName idecl
+                return $ mapMaybe (\rdr -> mkCandidate dyn mn rdr tyThing) rdrs
             Nothing -> return []
+            ) (GHC.modInfoExports mi)
+        Nothing -> return []
 
-        let fs = lefts  cs
-            ts = rights cs
+    let fs = lefts  cs
+        ts = rights cs
 
-        if execMode == Debug
-            then mapM_ (liftIO . print) (fs ++ ts)
-            else liftIO . L.putStrLn $ Json.encode (Dict kind $ fs ++ ts, fs, ts)
+    if execMode == Debug
+        then mapM_ (liftIO . print) (fs ++ ts)
+        else liftIO . L.putStrLn $ Json.encode (Dict kind $ fs ++ ts, fs, ts)
 
-    _ -> liftIO $ putStrLn "USAGE: types file"
 
 ideclShortModuleName :: GHC.ImportDecl t -> GHC.ModuleName
 ideclShortModuleName GHC.ImportDecl{GHC.ideclName, GHC.ideclAs} = case ideclAs of
