@@ -16,6 +16,9 @@ isHsSymbol c = not special && sym
   where special = A.inClass "(),;[]`{}_:\"'" c
         sym     = Char.isSymbol c || Char.isPunctuation c
 
+isHsLower :: Char -> Bool
+isHsLower c = Char.isLower c || c == '_'
+
 qualified :: A.Parser T.Text -> A.Parser T.Text
 qualified p = q <|> p
   where 
@@ -26,14 +29,14 @@ qualified p = q <|> p
             Just b  -> mdl `T.append` ('.' `T.cons` b)
 
 varid :: A.Parser T.Text
-varid = T.cons <$> A.satisfy Char.isLower <*> A.takeWhile p
+varid = T.cons <$> A.satisfy isHsLower <*> A.takeWhile p
   where
-    p c = Char.isUpper c || Char.isLower c || Char.isDigit c || (A.inClass "'_" c)
+    p c = Char.isUpper c || isHsLower c || Char.isDigit c || (c == '\'')
 
 conid :: A.Parser T.Text
 conid = T.cons <$> A.satisfy Char.isUpper <*> A.takeWhile p
   where
-    p c = Char.isUpper c || Char.isLower c || Char.isDigit c || (c == '\'')
+    p c = Char.isUpper c || isHsLower c || Char.isDigit c || (c == '\'')
 
 space :: A.Parser Int
 space = T.length <$> A.takeWhile Char.isSpace
@@ -159,8 +162,8 @@ positionNamesInConstructorP = do
 positionTopLevelP :: A.Parser ()
 positionTopLevelP = A.skipWhile (A.inClass "a-z") *> A.endOfInput
 
-hsLexP :: A.Parser [(Int, T.Text, Int)]
-hsLexP = many $ (,,) <$> space <*> token <*> space
+hsLexP :: A.Parser [(Int, T.Text)]
+hsLexP = many $ (,) <$> space <*> token
   where
     sp    = T.singleton <$> (A.satisfy (A.inClass "(),;[]`{}"))
     resop = A.choice . map A.string $ 
@@ -184,9 +187,9 @@ hsLexP = many $ (,,) <$> space <*> token <*> space
 
 positionOtherP :: A.Parser (Bool, Int)
 positionOtherP = do
-    (bf,_,_):is <- reverse <$> hsLexP 
-    let typ = "::" `elem` map center is
+    (bf,_):is <- reverse <$> hsLexP
+    let typ = "::" `elem` map snd is
     return (typ, sum (map len is) + bf)
   where 
-    len (bf,b,af) = bf + T.length b + af
-    center (_,c,_) = c
+    len (bf,b) = bf + T.length b
+
