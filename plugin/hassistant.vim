@@ -9,10 +9,6 @@ set cpo&vim
 if !exists('g:hassistant_executable_directory')
   let g:hassistant_executable_directory = expand('<sfile>:h') . '/../.cabal-sandbox/bin/'
 endif
-if !exists('g:hassistant_auto_expand_max_list')
-  let g:hassistant_auto_expand_max_list = 1
-endif
-
 let g:hassistant_modes = eval(libcall(g:hassistant_executable_directory . "library.so", "listModes", 0))
 
 if get(g:, 'hassistant_do_configuration', 1)
