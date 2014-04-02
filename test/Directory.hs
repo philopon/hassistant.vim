@@ -3,7 +3,7 @@
 
 module Directory where
 
-import qualified Hassistant.Directory.Internal as M
+import qualified Hassistant.Directory as M
 
 import Test.Tasty
 import Test.Tasty.QuickCheck as QC
