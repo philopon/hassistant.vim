@@ -15,12 +15,15 @@ function! hassistant#file_hash() "{{{
   return libcallnr(g:hassistant_executable_directory . "library.so", "hashFile", expand('%'))
 endfunction "}}}
 
-function! hassistant#get_imports() "{{{
+function! hassistant#get_xflags_and_imports() "{{{
   let buf  = ""
   let lnum = 1
   let eob  = line('$')
   while 1
     let line = getline(lnum)
+    if line =~# '{-#\s*LANGUAGE.*#-}'
+      let buf = buf . "\n" . line
+    endif
     if line =~# '^import ' || lnum > eob
       break
     endif
@@ -43,7 +46,7 @@ function! hassistant#string_hash(str) "{{{
 endfunction "}}}
 
 function! hassistant#buffer_hash() "{{{
-  let imp = hassistant#get_imports()
+  let imp = hassistant#get_xflags_and_imports()
   return hassistant#string_hash(imp)
 endfunction "}}}
 
@@ -58,7 +61,7 @@ function! hassistant#start_type_process() "{{{
   let b:hassistant_tmp     = ''
   let b:hassistant_hash    = hash
   let b:hassistant_process = vimproc#popen2(g:hassistant_executable_directory . "types " . expand('%'))
-  let imp = hassistant#get_imports()
+  let imp = hassistant#get_xflags_and_imports()
   call b:hassistant_process.stdin.write(imp)
   call b:hassistant_process.stdin.close()
   return 0

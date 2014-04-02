@@ -3,13 +3,17 @@
 
 module Hassistant.Parser where
 
+import qualified DynFlags
+
 import Control.Applicative
 
 import qualified Data.Attoparsec.Text as A
 import qualified Data.Char as Char
 import qualified Data.Text as T
+import Data.List
 
-import Hassistant.LANGUAGE
+languageChar :: [Char]
+languageChar = sort . nub $ concatMap (\(s,_,_) -> s) DynFlags.xFlags
 
 isHsSymbol :: Char -> Bool
 isHsSymbol c = not special && sym
@@ -49,6 +53,12 @@ seekTopLevel p = p <|> dropLine *> next
   where
     dropLine = A.skipWhile (not . A.isEndOfLine)
     next     = A.endOfLine *> p <|> A.endOfLine *> dropLine *> next
+
+languageP :: A.Parser [T.Text]
+languageP = A.skipSpace *> A.string "{-#" *> A.skipSpace *> A.string "LANGUAGE " *> A.skipSpace *>
+            (lang `A.sepBy1` (A.char ',' *> A.skipSpace)) <* A.skipSpace <* A.string "#-}"
+  where
+    lang = A.takeWhile1 (`elem` languageChar) <* A.skipSpace
 
 moduleNameP :: A.Parser T.Text
 moduleNameP = T.intercalate "." <$> conid `A.sepBy1` A.char '.'

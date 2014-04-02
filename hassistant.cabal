@@ -17,10 +17,9 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Hassistant.Directory
-                     , Hassistant.Imports
+                     , Hassistant.Header
                      , Hassistant.Common
                      , Hassistant.Parser
-                     , Hassistant.LANGUAGE
                      , Hassistant.Module
   -- other-extensions:    
   build-depends:       base             >= 4.6 && < 4.7

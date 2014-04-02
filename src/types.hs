@@ -31,7 +31,7 @@ import Data.Either
 import Data.Maybe
 
 import Hassistant.Directory
-import Hassistant.Imports
+import Hassistant.Header
 import Hassistant.Module
 import Hassistant.Common
 import Hassistant.Parser
@@ -77,7 +77,8 @@ types file execMode input = do
             , GHC.packageFlags  = ps
             }
 
-    let is = (if execMode == Debug then id else ("import Prelude":)) $
+    let is = (if execMode /= Debug && "NoImplicitPrelude" `notElem` languages input
+                  then ("import Prelude":) else id) $
              imports input
     
     idecls <- catMaybes <$> mapM (\i -> fmap Just (GHC.parseImportDecl i)

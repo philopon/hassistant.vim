@@ -28,10 +28,9 @@ import Data.Word (Word8)
 import Data.List
 import qualified Data.Attoparsec.Text as A
 
-import Hassistant.Imports
 import Hassistant.Common
 import Hassistant.Parser
-import Hassistant.LANGUAGE
+import Hassistant.Header
 import Hassistant.Module
 
 #ifdef MODULE
@@ -72,12 +71,12 @@ destruct = modifyMVar_ destructors $ \l -> sequence_ l >> return []
 hashFile :: CFilePath -> IO CInt
 hashFile cfile = do
     file <- peekCString cfile
-    fromIntegral <$> (importHash =<< T.readFile file)
+    fromIntegral <$> (calcHash =<< T.readFile file)
 
 hash :: CString -> IO CInt
 hash ccont = do
     cont <- unsafePackCStringToText ccont
-    fromIntegral <$> importHash cont
+    fromIntegral <$> calcHash cont
 
 --------------------------------------------------------------------------------
 
