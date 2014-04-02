@@ -18,23 +18,25 @@ let s:source = {
 function! s:source.get_complete_position(context) "{{{
   call hassistant#check_type_process()
   let ret = eval(libcall(g:hassistant_executable_directory . "library.so", "position", a:context.input))
-  let a:context.ret = ret
+  let a:context.source__ret = ret
   return ret.position
 endfunction "}}}
 
 function! s:source.gather_candidates(context) "{{{
-  if a:context.ret.mode == g:hassistant_modes.LANGUAGE
+  if a:context.source__ret.mode == g:hassistant_modes.LANGUAGE
     return eval(libcall(g:hassistant_executable_directory . "library.so", "gatherLANGUAGE", 0))
-  elseif a:context.ret.mode == g:hassistant_modes.NamesInModule
-    return eval(libcall(g:hassistant_executable_directory . "library.so", "gatherNamesInModule", expand('%') . "\n" . a:context.ret.module))
-  elseif a:context.ret.mode == g:hassistant_modes.NamesInConstructor
-    return  eval(libcall(g:hassistant_executable_directory . "library.so", "gatherNamesInConstructor", expand('%') . "\n" . a:context.ret.module . "\n" . a:context.ret.constructor))
-  elseif a:context.ret.mode == g:hassistant_modes.Module
+  elseif a:context.source__ret.mode == g:hassistant_modes.NamesInModule
+    return eval(libcall(g:hassistant_executable_directory . "library.so", "gatherNamesInModule",
+          \ expand('%') . "\n" . a:context.source__ret.module))
+  elseif a:context.source__ret.mode == g:hassistant_modes.NamesInConstructor
+    return  eval(libcall(g:hassistant_executable_directory . "library.so", "gatherNamesInConstructor", 
+          \ expand('%') . "\n" . a:context.source__ret.module . "\n" . a:context.source__ret.constructor))
+  elseif a:context.source__ret.mode == g:hassistant_modes.Module
     return eval(libcall(g:hassistant_executable_directory . "library.so", "gatherModule", expand('%')))
-  elseif a:context.ret.mode == g:hassistant_modes.TopLevel
+  elseif a:context.source__ret.mode == g:hassistant_modes.TopLevel
     return eval(libcall(g:hassistant_executable_directory . "library.so", "gatherTopLevel", 0))
-  elseif  a:context.ret.mode == g:hassistant_modes.Other
-    if a:context.ret.type
+  elseif  a:context.source__ret.mode == g:hassistant_modes.Other
+    if a:context.source__ret.type
       return deepcopy( get(b:, 'hassistant_types', []) )
     else
       return deepcopy( get(b:, 'hassistant_types', []) + get(b:, 'hassistant_vars', []))

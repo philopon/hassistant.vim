@@ -106,7 +106,6 @@ types file execMode input = do
         then mapM_ (liftIO . print) (fs ++ ts)
         else liftIO . L.putStrLn $ Json.encode (Dict kind $ fs ++ ts, fs, ts)
 
-
 ideclShortModuleName :: GHC.ImportDecl t -> GHC.ModuleName
 ideclShortModuleName GHC.ImportDecl{GHC.ideclName, GHC.ideclAs} = case ideclAs of
     Nothing -> GHC.unLoc ideclName
