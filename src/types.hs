@@ -56,10 +56,8 @@ main = getArgs >>= \case
 
 runLexer :: T.Text -> IO ()
 runLexer input = case A.parseOnly hsLexP input of
-    Left e  -> putStrLn e        >> exitFailure
-    Right r -> mapM_ printElem r >> exitSuccess
-  where
-    printElem (sp,e) = putStr (show sp) >> putChar '\t' >> T.putStrLn e
+    Left e  -> putStrLn e    >> exitFailure
+    Right r -> mapM_ print r >> exitSuccess
 
 types :: GHC.GhcMonad m => String -> ExecMode -> T.Text -> m ()
 types file execMode input = do

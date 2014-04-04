@@ -172,8 +172,17 @@ positionNamesInConstructorP = do
 positionTopLevelP :: A.Parser ()
 positionTopLevelP = A.skipWhile (A.inClass "a-z") *> A.endOfInput
 
-hsLexP :: A.Parser [(Int, T.Text)]
-hsLexP = many $ (,) <$> space <*> token
+data Token = Token { tokSpace  :: {-# UNPACK #-} !Int
+                   , tokSymbol :: T.Text 
+                   }
+instance Show Token where
+    show (Token s t) = show s ++ '\t': T.unpack t
+
+tokenLength :: Token -> Int
+tokenLength (Token i t) = i + T.length t
+
+hsLexP :: A.Parser [Token]
+hsLexP = many $ Token <$> space <*> token
   where
     sp    = T.singleton <$> (A.satisfy (A.inClass "(),;[]`{}"))
     resop = A.choice . map A.string $ 
@@ -197,9 +206,7 @@ hsLexP = many $ (,) <$> space <*> token
 
 positionOtherP :: A.Parser (Bool, Int)
 positionOtherP = do
-    (bf,_):is <- reverse <$> hsLexP
-    let typ = "::" `elem` map snd is
-    return (typ, sum (map len is) + bf)
-  where 
-    len (bf,b) = bf + T.length b
+    lst:is <- reverse <$> hsLexP
+    let typ = "::" `elem` map tokSymbol is
+    return (typ, sum (map tokenLength is) + tokSpace lst)
 
