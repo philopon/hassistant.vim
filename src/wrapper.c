@@ -4,7 +4,7 @@
 #define XSTR(a) #a
  
 #include <HsFFI.h>
-#include "library_stub.h"
+#include "Library_stub.h"
  
 extern void CAT(__stginit_, MODULE)(void);
  

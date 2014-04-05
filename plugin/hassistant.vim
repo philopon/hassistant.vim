@@ -11,7 +11,7 @@ if !exists('g:hassistant_executable_directory')
 endif
 let g:hassistant_modes = eval(libcall(g:hassistant_executable_directory . "library.so", "listModes", 0))
 
-if get(g:, 'hassistant_do_configuration', 1)
+if get(g:, 'hassistant_do_configuration', 1) && has('lua')
   call neocomplete#custom#source('hassistant', 'converters',
         \ ['converter_remove_overlap', 'converter_remove_last_paren',
         \  'converter_case', 'converter_abbr'])
