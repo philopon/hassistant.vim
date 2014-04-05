@@ -15,7 +15,7 @@ import System.IO.Unsafe(unsafePerformIO)
 import qualified Filesystem.Path.CurrentOS as P
 
 import Control.Applicative
-import Control.Concurrent
+import Control.Concurrent.MVar
 import Control.Exception
 
 import qualified Data.Text as T

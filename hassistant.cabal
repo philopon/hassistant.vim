@@ -11,9 +11,9 @@ author:              philopon
 maintainer:          philopon.dependence@gmail.com
 -- copyright:           
 category:            Development
-build-type:          Simple
+build-type:          Custom
 -- extra-source-files:  
-cabal-version:       >=1.10
+cabal-version:       >=1.18
 
 library
   exposed-modules:     Hassistant.Directory
@@ -34,7 +34,7 @@ library
                      , template-haskell >= 2.7
                      , aeson            >= 0.7
   hs-source-dirs:      src
-  ghc-options:         -Wall -O2 -threaded
+  ghc-options:         -Wall -O2 -fPIC
   default-language:    Haskell2010
 
 executable library.so
@@ -46,7 +46,9 @@ executable library.so
                      , aeson            >= 0.7
                      , system-filepath  >= 0.4.5
                      , attoparsec       >= 0.11.2
-  ghc-options:         -O2 -Wall -no-hs-main -shared -fPIC -threaded -lHSrts-ghc7.6.3
+
+  ghc-options:         -O2 -Wall -no-hs-main -fPIC -shared
+  cc-options:          -DMODULE=Library -fPIC
   cpp-options:         -DMODULE=Library
   c-sources:           src/wrapper.c
   default-language:    Haskell2010

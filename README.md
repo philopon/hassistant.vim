@@ -17,7 +17,12 @@ require
 installation
 ==============
 ```.vim
-NeoBundle 'philopon/hassistant.vim', { 'build' : { 'mac' : 'sh build.sh'}, 'depends': 'Shougo/vimproc' }
+NeoBundle 'philopon/hassistant.vim', 
+      \ { 'build'  : { 'mac' : 'sh build.sh'
+      \              , 'unix': 'sh build.sh' 
+      \              }
+      \ , 'depends': 'Shougo/vimproc' 
+      \ }
 ```
 
 screenshots

@@ -15,6 +15,8 @@ static void library_init(void)
   static int argc = 0;
 
   hs_init(&argc, &argv_);
+
+  hs_add_root(CAT(__stginit_, MODULE));
 }
  
 static void library_exit(void) __attribute__((destructor));
