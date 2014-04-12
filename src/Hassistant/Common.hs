@@ -29,7 +29,7 @@ unsafePackCStringToText cstr = do
 showSDoc :: Outputable.PrintUnqualified -> GHC.DynFlags -> Outputable.SDoc -> String
 showSDoc uq dyn = let style = Outputable.mkUserStyle uq Outputable.AllTheWay
                       cxt   = Outputable.initSDocContext dyn style
-                  in Pretty.showDocWith Pretty.OneLineMode . flip Outputable.runSDoc cxt
+                  in Pretty.showDoc Pretty.OneLineMode 99999. flip Outputable.runSDoc cxt
 
 data Candidate = Candidate 
     { word ::       T.Text

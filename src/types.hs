@@ -6,6 +6,7 @@
 {-# LANGUAGE TupleSections #-}
 
 import qualified GHC
+import ConLike
 import qualified Exception
 import qualified Outputable
 import qualified RdrName
@@ -124,7 +125,7 @@ rdrNames GHC.ImportDecl{GHC.ideclName, GHC.ideclQualified, GHC.ideclAs} name = c
 mkCandidate :: GHC.DynFlags -> GHC.ModuleName -> GHC.RdrName -> GHC.TyThing -> Maybe (Either Candidate Candidate)
 mkCandidate dyn mdl rdr tyThing = case tyThing of
     (GHC.AnId     i) -> Just . Left $ wkm (ppr rdr) (pprType $ GHC.idType i) (ppr mdl)
-    (GHC.ADataCon c) -> Just . Left $ wkm (ppr rdr) (pprType $ GHC.dataConType c) (ppr $ GHC.dataConTyCon c)
+    (GHC.AConLike (RealDataCon c)) -> Just . Left $ wkm (ppr rdr) (pprType $ GHC.dataConType c) (ppr $ GHC.dataConTyCon c)
     (GHC.ATyCon   c) -> case GHC.tyConClass_maybe c of
         Nothing  -> Just . Right $ wkm (ppr rdr) (ppConc . map ppr $ GHC.tyConDataCons c)  (ppr mdl)
         Just cls -> Just . Right $ wkm (ppr rdr) (ppConc . map ppr $ GHC.classMethods cls) (ppr mdl)

@@ -22,8 +22,8 @@ library
                      , Hassistant.Parser
                      , Hassistant.Module
   -- other-extensions:    
-  build-depends:       base             >= 4.6 && < 4.7
-                     , ghc              == 7.6.*
+  build-depends:       base             >= 4.7 && < 4.8
+                     , ghc              >= 7.8
                      , ghc-paths        >= 0.1
                      , Cabal            >= 1.16
                      , system-fileio    >= 0.3.10
@@ -40,7 +40,7 @@ library
 executable library.so
   main-is:             src/library.hs
   build-depends:       hassistant
-                     , base             >= 4.6 && < 4.7
+                     , base             >= 4.7 && < 4.8
                      , text             >= 1.1
                      , bytestring       >= 0.10
                      , aeson            >= 0.7
@@ -56,8 +56,8 @@ executable library.so
 executable types
   main-is:             src/types.hs
   build-depends:       hassistant
-                     , base             >= 4.6 && < 4.7
-                     , ghc              == 7.6.*
+                     , base             >= 4.7 && < 4.8
+                     , ghc              >= 7.8
                      , text             >= 1.1
                      , system-filepath  >= 0.4.5
                      , ghc-paths        >= 0.1
@@ -72,7 +72,7 @@ test-suite test
   hs-source-dirs:      test
   main-is:             test.hs
   build-depends:       hassistant
-                     , base             >= 4.6 && < 4.7
+                     , base             >= 4.7 && < 4.8
                      , tasty            >= 0.8
                      , tasty-hunit      >= 0.8
                      , tasty-quickcheck >= 0.8

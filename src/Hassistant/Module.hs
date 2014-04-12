@@ -117,7 +117,7 @@ gListModule fpkg dyn file mtxt = do
 tyThingToNamesInModule :: GHC.TyThing -> Maybe (NamesInModule GHC.Type GHC.RdrName)
 tyThingToNamesInModule = \case
     (GHC.AnId     v) -> Just $ Var (rdrName v) (GHC.idType v)
-    (GHC.ADataCon _) -> Nothing
+    (GHC.AConLike _) -> Nothing
     (GHC.ATyCon   t) -> Just $ case GHC.tyConClass_maybe t of
         Nothing  -> Constructor (rdrName t) $ map (\d -> (rdrName d, GHC.dataConType d)) (GHC.tyConDataCons t)
         Just cls -> Class       (rdrName t) $ map (\v -> (rdrName v, GHC.idType v))      (GHC.classMethods cls)
