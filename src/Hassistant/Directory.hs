@@ -82,12 +82,12 @@ extraPkgConfs base = do
 pathToModuleName :: P.FilePath -> Maybe T.Text
 pathToModuleName file = do 
     let ts = map P.toText . P.splitDirectories $ P.dropExtensions file
-    if all isRight ts
+    if all isModuleSection ts
         then Just . T.intercalate "." $ rights ts
         else Nothing
   where 
-    isRight (Right s) | Char.isUpper $ T.head s = True
-    isRight _                                   = False
+    isModuleSection (Right s) | Char.isUpper $ T.head s = True
+    isModuleSection _                                   = False
 
 moduleNameToPath :: T.Text -> P.FilePath
 moduleNameToPath = P.concat . map P.fromText . T.split (== '.')

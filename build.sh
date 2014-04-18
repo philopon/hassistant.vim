@@ -11,3 +11,4 @@ else
                 --enable-shared --enable-executable-dynamic -fshared       \
                  --ghc-option=-fPIC --gcc-option=-fPIC
 fi
+rm a.out
