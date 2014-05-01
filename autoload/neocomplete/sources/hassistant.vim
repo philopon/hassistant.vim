@@ -11,7 +11,7 @@ let s:source = {
   \ 'kind': 'manual',
   \ 'rank': 200,
   \ 'filetypes': { 'haskell': 1 },
-  \ 'min_pattern_length': 1,
+  \ 'min_pattern_length': get(g:, 'hassistant_min_mattern_length', 2),
   \ 'hooks': {},
   \ }
 
